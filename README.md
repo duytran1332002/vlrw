@@ -7,3 +7,10 @@
 - data: all functions to process the data.
 - preprocessing: all functiosn for proprocessing the data for training.
 - model: all models are necessary for training.
+```
+|- data/
+|- Lip_Reading_THDH/
+|   |- data
+|   |- preprocessing
+|   |- model
+```
