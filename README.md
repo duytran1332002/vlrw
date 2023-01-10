@@ -14,3 +14,20 @@
 |   |- preprocessing
 |   |- model
 ```
+
+## How to comment a function
+EXAMPLE:
+```python
+def check_alignment(audio_path, alignment_path, save_audio=False, path_save_audio=None):
+    '''
+    parameter:
+        audio_path: str - path audio
+        alignment_path: str - path csv
+        save_audio: bool - save audio or not
+        path_save_audio: str - path save audio, if save_audio is True, you should give the path
+    return:
+        pandas table - the alignment is correct or not
+    '''
+    # check the audio file is exist or not
+    pass
+```
