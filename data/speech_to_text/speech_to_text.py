@@ -51,8 +51,33 @@ class SpeechToText:
         decoder = BeamSearchDecoderCTC(alphabet,
                                     language_model=LanguageModel(lm_model))
         return decoder
+    
+    def _transcribe_with_vector(self, audio_vector, ds):
+        # check cuda is available or not
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            input_values = self.processor(
+                    audio_vector, 
+                    sampling_rate=ds["sampling_rate"], 
+                    return_tensors="pt"
+            ).input_values.to("cuda")
+            self.model.to("cuda")
+        else:
+            input_values = self.processor(
+                    audio_vector, 
+                    sampling_rate=ds["sampling_rate"], 
+                    return_tensors="pt"
+            ).input_values
+        logits = self.model(input_values).logits[0]
+        beam_search_output = self.ngram_lm_model.decode(logits.cpu().detach().numpy(), beam_width=500)
+        # clean up
+        del input_values, logits
+        # empty cache
+        torch.cuda.empty_cache()
+        return beam_search_output
 
-    def transcribe(self, audio_path = 'data/speechtotext/test.wav'):
+
+    def _transcribe_with_path(self, audio_path = 'data/speechtotext/test.wav'):
         # check the audio file is exist or not
         if not os.path.exists(audio_path):
             print('File not found')
@@ -69,39 +94,17 @@ class SpeechToText:
 
         # get the predictions
         result = ''
-        for trim in range(0, len(audio_list)):
-            # check cuda is available or not
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                input_values = self.processor(
-                        audio_list[trim], 
-                        sampling_rate=ds["sampling_rate"], 
-                        return_tensors="pt"
-                ).input_values.to("cuda")
-                self.model.to("cuda")
-            else:
-                input_values = self.processor(
-                        audio_list[trim], 
-                        sampling_rate=ds["sampling_rate"], 
-                        return_tensors="pt"
-                ).input_values
-            logits = self.model(input_values).logits[0]
-            predicted_ids = torch.argmax(logits, dim=-1)
-            transcription = self.processor.decode(predicted_ids)
-            beam_search_output = self.ngram_lm_model.decode(logits.cpu().detach().numpy(), beam_width=500)
+        for trim in audio_list:
+            beam_search_output = self._transcribe_with_vector(audio_vector=trim, ds=ds)
             #print("Beam search output: {}".format(beam_search_output))
             result += " " + beam_search_output
-            # clean up
-            del input_values, logits, predicted_ids, transcription, beam_search_output
-            # empty cache
-            torch.cuda.empty_cache()
         return result
     
     def print_result(self, audio_path = 'data/speechtotext/test.wav'):
-        print(self.transcribe(audio_path))
+        print(self._transcribe_with_path(audio_path))
         IPython.display.Audio(audio_path)
     
     def save_result_to_file(self, audio_path = '', file_name = 'result.txt'):
         with open(file_name, 'w') as f:
-            f.write(self.transcribe(audio_path))
+            f.write(self._transcribe_with_path(audio_path))
         print("Save result to file: ", file_name)
