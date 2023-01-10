@@ -41,7 +41,7 @@ pip3 install torch torchvision torchaudio --extra-index-url https://download.pyt
 ```
 # Quick start
 ```python
-from speechtotext import SpeechToText
+from speech_to_text import SpeechToText
 stt = SpeechToText()
 # print and show the audio
 stt.print_result('/home/duy1332002/Desktop/Lip_Reading_THDH/data/speechtotext/t5.wav')
