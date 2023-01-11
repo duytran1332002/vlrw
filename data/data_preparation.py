@@ -21,7 +21,7 @@ class DataPreparation:
             date.group(1)) > 1 else '0' + date.group(1)
         self.video_name = f'{year}{month}{day}.mp4'
 
-        # Initiate data folder
+        # Initiate data folders
         if not os.path.exists(data_path):
             os.makedirs(data_path)
         self.data_path = data_path
@@ -62,7 +62,10 @@ class DataPreparation:
         # 5. Convert csv to srt
         self.convert_to_srt()
 
-    def download(self):
+    def download(self) -> None:
+        '''
+            Download video from YouTube
+        '''
         if not os.path.isfile(os.path.join(self.raw_videos_path,
                                            self.video_name)):
             try:
@@ -78,8 +81,6 @@ class DataPreparation:
             Trim a part of the video and then extract audio
 
             Parameters:
-                videos_name: str
-                    path to audio folder
                 start: float
                     where to begin trimming
                 end: float
@@ -89,7 +90,7 @@ class DataPreparation:
         video_path = os.path.join(self.videos_path, self.video_name)
         raw_audio_path = os.path.join(self.raw_audios_path,
                                       self.video_name.replace('mp4', 'wav'))
-        video_stream, audio_stream = self.get_video_stream(
+        video_stream, audio_stream = self.__get_video_stream(
             raw_video_path, start, end)
         # Trim first minute of the video
         if not os.path.isfile(video_path):
@@ -108,7 +109,18 @@ class DataPreparation:
                                              format='wav')
             raw_audio_output.run()
 
-    def get_video_stream(self, raw_video_path, start, end):
+    def __get_video_stream(self, raw_video_path: str, start, end):
+        '''
+            Get video stream and audio stream
+
+            Parameters:
+                raw_video_path: str
+                    Path to video
+                start: float
+                    Second in video to start streaming
+                end: float
+                    Second in video to end streaming
+        '''
         input_stream = ffmpeg.input(raw_video_path)
         pts = 'PTS-STARTPTS'
         if end is None:
@@ -125,6 +137,15 @@ class DataPreparation:
         return video, audio
 
     def resampling(self, target_sampling_rate=16000, res_type="kaiser_best"):
+        '''
+            Resample audio at a desired sampling rate
+
+            Parameters:
+                target_sampling_rate: int (default=16000)
+                    Desired sampling rate
+                res_type: str (default='kasier_best)
+                    Resampling type
+        '''
         audio_name = self.video_name.replace('mp4', 'wav')
         raw_audio_path = os.path.join(self.raw_audios_path, audio_name)
         audio_path = os.path.join(self.audios_path, audio_name)
@@ -141,6 +162,9 @@ class DataPreparation:
         sf.write(audio_path, speech_array, samplerate=target_sampling_rate)
 
     def transcribe_and_align(self):
+        '''
+            Transcribe the audio and align each word to the speech
+        '''
         audio_path = os.path.join(self.audios_path,
                                   self.video_name.replace('mp4', 'wav'))
         transcript_path = os.path.join(self.transcripts_path,
@@ -155,6 +179,9 @@ class DataPreparation:
                                            aligned_transcript_path)
 
     def convert_to_srt(self):
+        '''
+            Convert csv file to srt file
+        '''
         aligned_transcript_path = os.path.join(
             self.aligned_transcripts_path,
             self.video_name.replace('mp4', 'csv')
@@ -186,4 +213,5 @@ if __name__ == '__main__':
     data_path = r'..\..\data'
     for video_url in playlist.video_urls:
         DataPreparation(video_url, data_path).trim_and_extract_audio()
+        # DataPreparation(video_url, data_path)()
     print('\nPreparation completed!')
