@@ -1,6 +1,5 @@
 future
 numpy
-librosa
 soundfile
 musdb
 museval
@@ -12,3 +11,8 @@ tensorboard
 sortedcontainers
 youtube_dl
 g2p_en
+transformers==4.9.2 
+pyctcdecode==v0.1.0
+kenlm
+pytube
+moviepy

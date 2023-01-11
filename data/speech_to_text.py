@@ -82,15 +82,17 @@ class SpeechToText:
                                                             ds['sampling_rate'])
 
         # trim audio to each 10s
-        while len(ds['speech']) > 160000:
-            audio_list.append(ds['speech'][:160000])
-            ds['speech'] = ds['speech'][160000:]
+        f = 160000
+        while len(ds['speech']) > f:
+            audio_list.append(ds['speech'][:f])
+            ds['speech'] = ds['speech'][f:]
         audio_list.append(ds['speech'])
 
         # get the predictions
         transcript = ''
-        total_words = []
-        total_word_align = []
+        # total_words = []
+        # total_word_align = []
+        alignment = pd.DataFrame(columns=['start', 'end', 'word'])
         for trim in range(0, len(audio_list)):
             # check cuda is available or not
             if torch.cuda.is_available():
@@ -123,20 +125,15 @@ class SpeechToText:
                 method='MTL_BDR', cuda=True
             )
             resolution = 256 / ds['sampling_rate'] * 3
-            # for i in range(len(word_align)):
-            #     word_time = word_align[i]
-            #     new_row = pd.DataFrame({'start': [word_time[0] * resolution],
-            #                             'end': [word_time[1] * resolution],
-            #                             'word': [words[i]]})
-            #     pd.concat([alignment, new_row], ignore_index=True)
-            # word_time = np.array(word_align, dtype=np.float64)
-            # new_row = pd.DataFrame({'start': word_time[:, 0] * resolution,
-            #                         'end': word_time[:, 1] * resolution,
-            #                         'word': words})
-            # print(new_row)
-            # pd.concat([alignment, new_row], ignore_index=True)
-            total_words.extend(words)
-            total_word_align.extend(word_align)
+            word_time = np.array(word_align, dtype=np.float64)
+            word_time = word_time * resolution + f * trim
+            new_row = pd.DataFrame({'start': word_time[:, 0],
+                                    'end': word_time[:, 1],
+                                    'word': words})
+            print(new_row)
+            pd.concat([alignment, new_row], ignore_index=True)
+            # total_words.extend(words)
+            # total_word_align.extend(word_align)
             transcript += " " + beam_search_output
             # clean up
             del (
@@ -148,7 +145,8 @@ class SpeechToText:
             )
             # empty cache
             torch.cuda.empty_cache()
-        return transcript, total_words, total_word_align
+        # return transcript, total_words, total_word_align
+        return transcript, alignment
 
     def print_result(self, audio_path='data/speechtotext/test.wav'):
         print(self.transcribe(audio_path))
