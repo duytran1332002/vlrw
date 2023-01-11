@@ -89,31 +89,40 @@ class DataPreparation:
         video_path = os.path.join(self.videos_path, self.video_name)
         raw_audio_path = os.path.join(self.raw_audios_path,
                                       self.video_name.replace('mp4', 'wav'))
+        video_stream, audio_stream = self.get_video_stream(
+            raw_video_path, start, end)
+        # Trim first minute of the video
         if not os.path.isfile(video_path):
-            input_stream = ffmpeg.input(raw_video_path)
-            pts = 'PTS-STARTPTS'
-            if end is None:
-                end = (ffmpeg
-                       .probe(raw_video_path)
-                       .get('format', {})
-                       .get('duration'))    # Get video's length
-            video = (input_stream
-                     .trim(start=start, end=end)
-                     .filter('setpts', pts))
-            audio = (input_stream
-                     .filter('atrim', start=start, end=end)
-                     .filter('asetpts', pts))
-            video_output = ffmpeg.output(ffmpeg.concat(video, audio, v=1, a=1),
+            print('Trimming video')
+            video_output = ffmpeg.output(ffmpeg.concat(video_stream,
+                                                       audio_stream,
+                                                       v=1, a=1),
                                          video_path,
                                          format='mp4')
             video_output.run()
-            # Extract audio
-            if not os.path.isfile(raw_audio_path):
-                print('Extracting audio')
-                raw_audio_output = ffmpeg.output(audio,
-                                                 raw_audio_path,
-                                                 format='wav')
-                raw_audio_output.run()
+        # Extract audio
+        if not os.path.isfile(raw_audio_path):
+            print('Extracting audio')
+            raw_audio_output = ffmpeg.output(audio_stream,
+                                             raw_audio_path,
+                                             format='wav')
+            raw_audio_output.run()
+
+    def get_video_stream(self, raw_video_path, start, end):
+        input_stream = ffmpeg.input(raw_video_path)
+        pts = 'PTS-STARTPTS'
+        if end is None:
+            end = (ffmpeg
+                   .probe(raw_video_path)
+                   .get('format', {})
+                   .get('duration'))    # Get video's length
+        video = (input_stream
+                 .trim(start=start, end=end)
+                 .filter('setpts', pts))
+        audio = (input_stream
+                 .filter('atrim', start=start, end=end)
+                 .filter('asetpts', pts))
+        return video, audio
 
     def resampling(self, target_sampling_rate=16000, res_type="kaiser_best"):
         audio_name = self.video_name.replace('mp4', 'wav')
