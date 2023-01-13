@@ -10,7 +10,6 @@ from alignment_model import AcousticModel, BoundaryDetection, train_audio_transf
 
 np.random.seed(7)
 
-
 def preprocess_from_file(audio_file, sampling_rate,
                          transcript_file, word_file=None):
     audio, _ = preprocess_audio(audio_file, sampling_rate)
@@ -38,7 +37,7 @@ def align(audio, sampling_rate, words, lyrics_p, idx_word_p, idx_line_p, method=
     else:
         model_type = method
         bdr_flag = False
-    print("Model: {} BDR?: {}".format(model_type, bdr_flag))
+    # print("Model: {} BDR?: {}".format(model_type, bdr_flag))
 
     # prepare acoustic model params
     if model_type == "Baseline":
@@ -65,12 +64,10 @@ def align(audio, sampling_rate, words, lyrics_p, idx_word_p, idx_line_p, method=
         hparams['n_feats'], hparams['stride'], hparams['dropout']
     ).to(device)
 
-    print("Loading acoustic model from checkpoint...")
+    # Loading BDR model from checkpoint
     state = utils.load_model(
         ac_model, "./checkpoints/checkpoint_{}".format(model_type), cuda=(device == "gpu"))
     ac_model.eval()
-
-    print("Computing phoneme posteriorgram...")
 
     # reshape input, prepare mel
     x = audio.reshape(1, 1, -1)
@@ -110,12 +107,12 @@ def align(audio, sampling_rate, words, lyrics_p, idx_word_p, idx_line_p, method=
             bdr_hparams['n_cnn_layers'], bdr_hparams['rnn_dim'], bdr_hparams['n_class'],
             bdr_hparams['n_feats'], bdr_hparams['stride'], bdr_hparams['dropout']
         ).to(device)
-        print("Loading BDR model from checkpoint...")
+        
+        # Loading BDR model from checkpoint
         state = utils.load_model(
             bdr_model, "./checkpoints/checkpoint_BDR", cuda=(device == "gpu"))
         bdr_model.eval()
 
-        print("Computing boundary probability curve...")
         # get boundary prob curve
         bdr_outputs = bdr_model(x).data.cpu().numpy().reshape(-1)
         # apply log
@@ -124,16 +121,14 @@ def align(audio, sampling_rate, words, lyrics_p, idx_word_p, idx_line_p, method=
         line_start = [d[0] for d in idx_line_p]
 
         # start alignment
-        print("Aligning...It might take a few minutes...")
         word_align, score = utils.alignment_bdr(
             song_pred, lyrics_p, idx_word_p, bdr_outputs, line_start)
     else:
         # start alignment
-        print("Aligning...It might take a few minutes...")
         word_align, score = utils.alignment(song_pred, lyrics_p, idx_word_p)
 
     t = time() - t
-    print("Alignment Score:\t{}\tTime:\t{}".format(score, t))
+    # print("Alignment Score:\t{}\tTime:\t{}".format(score, t))
 
     return word_align, words
 

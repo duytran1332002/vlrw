@@ -128,20 +128,20 @@ class SpeechToText:
             try:
                 line = self._transcribe_with_vector(
                     audio_vector=audio_list[trim], ds=ds)
-                print("Beam search output: {}".format(transcript))
+                # print("Beam search output: {}".format(transcript))
 
                 # align transcript if there speech in the audio
-                if len(transcript.strip()) > 0:
+                if len(line.strip()) > 0:
                     new_rows = self._align_with_vector(audio_list[trim],
                                                        ds['sampling_rate'],
-                                                       transcript)
+                                                       line)
                     new_rows.loc[:, ['start', 'end']] += trim * 10
                     alignment = pd.concat([alignment, new_rows],
                                           ignore_index=True)
 
                 transcript += " " + line
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                print(e)
 
         return transcript, alignment
 

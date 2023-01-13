@@ -76,7 +76,7 @@ class DataPreparation:
         if not os.path.isfile(os.path.join(self.raw_videos_path,
                                            self.video_name)):
             try:
-                print(f'\nDownloading {self.video.title} as {self.video_name}')
+                print(f'Downloading {self.video.title} as {self.video_name}')
                 stream = self.video.streams.get_highest_resolution()
                 stream.download(filename=self.video_name,
                                 output_path=self.raw_videos_path)
@@ -157,7 +157,7 @@ class DataPreparation:
         )
 
         if not os.path.isfile(csv_transcript_path):
-            print(f'Transcribing and aligning {audio_name}')
+            print(f'\nTranscribing and aligning {audio_name}')
             self.speech2text.save_result_to_file(audio_path,
                                                  transcript_path,
                                                  csv_transcript_path)
@@ -219,6 +219,7 @@ if __name__ == '__main__':
         try:
             video = YouTube(video_url)
             process = DataPreparation(video, speech2text, data_path)
+            print('\n')
             start = time.time()
             process.transcribe_and_align()
             end = time.time()
@@ -229,6 +230,10 @@ if __name__ == '__main__':
             print(f'Error when preparing {process.video_name}:')
             print(e)
             error_videos.append(process.video_name)
+
+        # video = YouTube(video_url)
+        # process = DataPreparation(video, speech2text, data_path)
+        # process.transcribe_and_align()
 
     # Time measurement
     run_time = np.array(run_time)
