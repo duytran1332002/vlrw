@@ -61,7 +61,8 @@ class SpeechToText:
         # vocab_list[tokenizer.eos_token_id] = ""
         # convert space character representation
         vocab_list[tokenizer.word_delimiter_token_id] = " "
-        # specify ctc blank char index, since conventially it is the last entry of the logit matrix
+        # specify ctc blank char index,
+        # since conventially it is the last entry of the logit matrix
         alphabet = Alphabet.build_alphabet(
             vocab_list, ctc_token_idx=tokenizer.pad_token_id)
         lm_model = kenlm.Model(ngram_lm_path)
@@ -69,12 +70,40 @@ class SpeechToText:
                                        language_model=LanguageModel(lm_model))
         return decoder
 
-    def transcribe(self, audio_path='data/speechtotext/test.wav'):
+    def _transcribe_with_vector(self, audio_vector, ds):
+        # check cuda is available or not
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            input_values = self.processor(
+                audio_vector,
+                sampling_rate=ds["sampling_rate"],
+                return_tensors="pt"
+            ).input_values.to("cuda")
+            self.model.to("cuda")
+        else:
+            input_values = self.processor(
+                audio_vector,
+                sampling_rate=ds["sampling_rate"],
+                return_tensors="pt"
+            ).input_values
+        logits = self.model(input_values).logits[0]
+        beam_search_output = self.ngram_lm_model.decode(
+            logits.cpu().detach().numpy(), beam_width=500)
+
+        # clean up
+        del input_values, logits
+
+        # empty cache
+        torch.cuda.empty_cache()
+
+        return beam_search_output
+
+    def _transcribe_with_path(self, audio_path='data/speechtotext/test.wav'):
         # check the audio file is exist or not
         if not os.path.exists(audio_path):
             print('File not found')
             return None
-        
+
         # load dummy dataset and read soundfiles
         ds = self.map_to_array({"file": audio_path})
         ds['speech'] = np.mean(ds['speech'], axis=1)
@@ -94,64 +123,66 @@ class SpeechToText:
         # get the predictions
         transcript = ''
         alignment = pd.DataFrame(columns=['start', 'end', 'word'])
-        
+
         for trim in range(len(audio_list)):
-            # check cuda is available or not
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                input_values = self.processor(
-                    audio_list[trim],
-                    sampling_rate=ds["sampling_rate"],
-                    return_tensors="pt"
-                ).input_values.to("cuda")
-                self.model.to("cuda")
-            else:
-                input_values = self.processor(
-                    audio_list[trim],
-                    sampling_rate=ds["sampling_rate"],
-                    return_tensors="pt"
-                ).input_values
-            logits = self.model(input_values).logits[0]
-            predicted_ids = torch.argmax(logits, dim=-1)
-            transcription = self.processor.decode(predicted_ids)
-            beam_search_output = self.ngram_lm_model.decode(
-                logits.cpu().detach().numpy(), beam_width=500)
-            print("Beam search output: {}".format(beam_search_output))
+            transcript = self._transcribe_with_vector(
+                audio_vector=trim, ds=ds)
+            # print("Beam search output: {}".format(beam_search_output))
 
             # align transcript if there speech in the audio
-            if len(beam_search_output.strip()) > 0:
-                words, transcript_p, idx_word_p, idx_line_p = preprocess_transcript(
-                    beam_search_output)
-                word_align, words = align(
-                    audio_list[trim], ds['sampling_rate'],
-                    words, transcript_p, idx_word_p, idx_line_p,
-                    method='MTL_BDR', cuda=True
-                )
-                resolution = 256 / ds['sampling_rate'] * 3
-                word_time = np.array(word_align, dtype=np.float64)
-                word_time = word_time * resolution + trim * 10
-                new_rows = pd.DataFrame({'start': word_time[:, 0],
-                                         'end': word_time[:, 1],
-                                         'word': words})
+            if len(transcript.strip()) > 0:
+                new_rows = self._align_with_vector(audio_list[trim],
+                                                   ds['sampling_rate'],
+                                                   transcript)
+                new_rows.loc[:, ['start', 'end']] += trim * 10
                 alignment = pd.concat([alignment, new_rows], ignore_index=True)
-            transcript += " " + beam_search_output
-            
-            # clean up
-            del (
-                input_values,
-                logits,
-                predicted_ids,
-                transcription,
-                beam_search_output
-            )
-            
-            # empty cache
-            torch.cuda.empty_cache()
-            
+
+            transcript += " " + transcript
+
         return transcript, alignment
 
-    def print_result(self, audio_path='data/speechtotext/test.wav'):
-        print(self.transcribe(audio_path))
+    def _align_with_vector(self, audio: np.ndarray,
+                           sampling_rate: int,
+                           transcript: str) -> pd.DataFrame:
+        '''
+            Align each word in transcript with each word in the speech
+
+            Parameters:
+                audio: numpy.ndarray
+                    Audio array
+                sampling_rate: int
+                    Sampling rate of the audio
+                transcript: str
+                    Transcript of the speech
+
+            Returns:
+                new_rows: pandas.DataFrame
+                    Aligned words
+        '''
+        words, transcript_p, idx_word_p, idx_line_p = preprocess_transcript(
+            transcript)
+        word_align, words = align(
+            audio, sampling_rate,
+            words, transcript_p, idx_word_p, idx_line_p,
+            method='MTL_BDR', cuda=True
+        )
+        resolution = 256 / sampling_rate * 3
+        word_time = np.array(word_align, dtype=np.float64)
+        word_time = word_time * resolution
+        new_rows = pd.DataFrame({'start': word_time[:, 0],
+                                 'end': word_time[:, 1],
+                                 'word': words})
+        return new_rows
+
+    def print_result(self, audio_path: str) -> None:
+        '''
+            Play the audio
+
+            Parameters:
+                audio_path: str
+                    Path to the audio
+        '''
+        print(self._transcribe_with_path(audio_path))
         IPython.display.Audio(audio_path)
 
     def save_result_to_file(self, audio_path: str,
@@ -168,7 +199,7 @@ class SpeechToText:
                 aligned_transcript_path: str
                     Path to save aligned transcript csv file
         '''
-        transcript, alignment = self.transcribe(audio_path)
+        transcript, alignment = self._transcribe_with_path(audio_path)
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(transcript)
         print("Save transcript to file: ", transcript_path)
@@ -176,7 +207,8 @@ class SpeechToText:
                          encoding='utf-8', index=False)
         print("Save transcript to file: ", aligned_transcript_path)
 
-    def resampling(self, speech_array: np.ndarray,
+    @staticmethod
+    def resampling(speech_array: np.ndarray,
                    sampling_rate: int,
                    target_sampling_rate: int = 16000,
                    res_type: str = "kaiser_best") -> tuple:

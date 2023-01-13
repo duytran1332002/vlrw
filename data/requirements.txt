@@ -15,4 +15,3 @@ transformers==4.9.2
 pyctcdecode==v0.1.0
 kenlm
 pytube
-moviepy

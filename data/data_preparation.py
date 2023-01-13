@@ -216,22 +216,24 @@ if __name__ == '__main__':
     for video_url in playlist.video_urls:
         try:
             process = DataPreparation(video_url, data_path)
+            process()
             # start = time.time()
             # process.transcribe_and_align()
             # end = time.time()
             # run_time.append(end - start)
-            # DataPreparation(video_url, data_path)()
         except Exception as e:
             print(f'Error when preparing {process.video_name}:')
             print(e)
-            error_videos.append(video_url)
+            error_videos.append(process.video_name)
 
     # Time measurement
     # run_time = np.array(run_time)
     # print(f'Longest run time: {run_time.max():.2f}s')
     # print(f'Shortest run time: {run_time.min():.2f}s')
     # print(f'Average run time: {run_time.mean():.2f}s')
-    # with open('error_videos.txt', 'w') as f:
-    #     print(*error_videos, sep='\n', file=f)
+
+    # Save name of videos that cause error
+    with open('error_videos.txt', 'w') as f:
+        print(*error_videos, sep='\n', file=f)
 
     print('\nPreparation completed!')
