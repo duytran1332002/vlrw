@@ -1,15 +1,24 @@
 import ffmpeg
-import librosa
 import os
 import pandas as pd
 import re
-import soundfile as sf
+import time
 from pytube import YouTube, Playlist
 from speech_to_text import SpeechToText
+import numpy as np
 
 
 class DataPreparation:
-    def __init__(self, video_url, data_path) -> None:
+    def __init__(self, video, data_path) -> None:
+        '''
+            Initiate properties
+
+            Parameters:
+                video: str or YouTube
+                    pytube object or name of the video in local
+                data_path: str
+                    Path to data folder
+        '''
         self.video = YouTube(video_url)
 
         # Get video name
@@ -31,35 +40,31 @@ class DataPreparation:
         self.videos_path = data_path + r'\videos'
         if not os.path.exists(self.videos_path):
             os.makedirs(self.videos_path)
-        self.raw_audios_path = data_path + r'\raw_audios'
-        if not os.path.exists(self.raw_audios_path):
-            os.makedirs(self.raw_audios_path)
         self.audios_path = data_path + r'\audios'
         if not os.path.exists(self.audios_path):
             os.makedirs(self.audios_path)
         self.transcripts_path = data_path + r'\transcripts'
         if not os.path.exists(self.transcripts_path):
             os.makedirs(self.transcripts_path)
-        self.aligned_transcripts_path = data_path + r'\aligned_transcripts'
-        if not os.path.exists(self.aligned_transcripts_path):
-            os.makedirs(self.aligned_transcripts_path)
+        self.csv_transcripts_path = data_path + r'\csv_transcripts'
+        if not os.path.exists(self.csv_transcripts_path):
+            os.makedirs(self.csv_transcripts_path)
+        self.srt_transcripts_path = data_path + r'\srt_transcripts'
+        if not os.path.exists(self.srt_transcripts_path):
+            os.makedirs(self.srt_transcripts_path)
 
     def __call__(self) -> None:
-
         # 1. Download video
         self.download()
 
         # 2. Trim the first minute of video and
-        #    extract raw audio
+        #    extract audio
         self.trim_and_extract_audio()
 
-        # 3. Resampling raw audio that is not sampled at wanted frequency
-        self.resampling(target_sampling_rate=16000)
-
-        # 4. Transcibe the audio and align transcript
+        # 3. Transcibe the audio and align transcript
         self.transcribe_and_align()
 
-        # 5. Convert csv to srt
+        # 4. Convert csv to srt
         self.convert_to_srt()
 
     def download(self) -> None:
@@ -88,13 +93,13 @@ class DataPreparation:
         '''
         raw_video_path = os.path.join(self.raw_videos_path, self.video_name)
         video_path = os.path.join(self.videos_path, self.video_name)
-        raw_audio_path = os.path.join(self.raw_audios_path,
-                                      self.video_name.replace('mp4', 'wav'))
+        audio_path = os.path.join(self.audios_path,
+                                  self.video_name.replace('mp4', 'wav'))
         video_stream, audio_stream = self.__get_video_stream(
             raw_video_path, start, end)
         # Trim first minute of the video
         if not os.path.isfile(video_path):
-            print('Trimming video')
+            print(f'Trimming {self.video_name}')
             video_output = ffmpeg.output(ffmpeg.concat(video_stream,
                                                        audio_stream,
                                                        v=1, a=1),
@@ -102,14 +107,14 @@ class DataPreparation:
                                          format='mp4')
             video_output.run()
         # Extract audio
-        if not os.path.isfile(raw_audio_path):
-            print('Extracting audio')
-            raw_audio_output = ffmpeg.output(audio_stream,
-                                             raw_audio_path,
-                                             format='wav')
-            raw_audio_output.run()
+        if not os.path.isfile(audio_path):
+            print(f'Extracting audio from {self.video_name}')
+            audio_output = ffmpeg.output(audio_stream,
+                                         audio_path,
+                                         format='wav')
+            audio_output.run()
 
-    def __get_video_stream(self, raw_video_path: str, start, end):
+    def __get_video_stream(self, raw_video_path: str, start, end) -> tuple:
         '''
             Get video stream and audio stream
 
@@ -136,74 +141,68 @@ class DataPreparation:
                  .filter('asetpts', pts))
         return video, audio
 
-    def resampling(self, target_sampling_rate=16000, res_type="kaiser_best"):
-        '''
-            Resample audio at a desired sampling rate
-
-            Parameters:
-                target_sampling_rate: int (default=16000)
-                    Desired sampling rate
-                res_type: str (default='kasier_best)
-                    Resampling type
-        '''
-        audio_name = self.video_name.replace('mp4', 'wav')
-        raw_audio_path = os.path.join(self.raw_audios_path, audio_name)
-        audio_path = os.path.join(self.audios_path, audio_name)
-        speech_array, sampling_rate = sf.read(raw_audio_path)
-        if len(speech_array.shape) == 2:
-            speech_array = speech_array[..., 0]
-        if sampling_rate != target_sampling_rate:
-            print('Resampling audio')
-            speech_array = librosa.resample(
-                speech_array,
-                orig_sr=sampling_rate, target_sr=target_sampling_rate,
-                res_type=res_type
-            )
-        sf.write(audio_path, speech_array, samplerate=target_sampling_rate)
-
     def transcribe_and_align(self):
         '''
             Transcribe the audio and align each word to the speech
         '''
-        audio_path = os.path.join(self.audios_path,
-                                  self.video_name.replace('mp4', 'wav'))
+        audio_name = self.video_name.replace('mp4', 'wav')
+        audio_path = os.path.join(self.audios_path, audio_name)
         transcript_path = os.path.join(self.transcripts_path,
                                        self.video_name.replace('mp4', 'txt'))
-        aligned_transcript_path = os.path.join(
-            self.aligned_transcripts_path,
+        csv_transcript_path = os.path.join(
+            self.csv_transcripts_path,
             self.video_name.replace('mp4', 'csv')
         )
-        print('Transcribing and aligning')
-        SpeechToText().save_result_to_file(audio_path,
-                                           transcript_path,
-                                           aligned_transcript_path)
+
+        if not os.path.isfile(csv_transcript_path):
+            print(f'Transcribing and aligning {audio_name}')
+            SpeechToText().save_result_to_file(audio_path,
+                                               transcript_path,
+                                               csv_transcript_path)
 
     def convert_to_srt(self):
         '''
             Convert csv file to srt file
         '''
-        aligned_transcript_path = os.path.join(
-            self.aligned_transcripts_path,
-            self.video_name.replace('mp4', 'csv')
-        )
-        df = pd.read_csv(self.aligned_alignement_path,
-                         names=['start', 'end', 'word'])
 
         def sec_to_timecode(x: float) -> str:
+            '''
+                Calculate timecode from second
+
+                Parameters:
+                    x: float
+                        Second
+            '''
             hour, x = divmod(x, 3600)
             minute, x = divmod(x, 60)
             second, x = divmod(x, 1)
             millisecond = int(x * 1000.)
             return '%.2d:%.2d:%.2d,%.3d' % (hour, minute, second, millisecond)
 
-        with open(aligned_transcript_path.replace('csv', 'srt'), 'w', encoding='utf-8') as f:
-            for i in range(len(df)):
-                start = df["start"].values[i]
-                end = df["end"].values[i]
-                f.write(f'{i+1}\n')
-                f.write(
-                    f'{sec_to_timecode(start)} --> {sec_to_timecode(end)}\n')
-                f.write(f'{df["word"].values[i]}\n\n')
+        csv_name = self.video_name.replace('mp4', 'csv')
+        csv_path = os.path.join(
+            self.csv_transcripts_path,
+            csv_name
+        )
+        srt_name = self.video_name.replace('mp4', 'srt')
+        srt_path = os.path.join(
+            self.srt_transcripts_path,
+            srt_name
+        )
+
+        if not os.path.isfile(srt_path):
+            df = pd.read_csv(csv_path)
+
+            print(f'Converting {csv_name} to {srt_name}')
+            with open(srt_path, 'w', encoding='utf-8') as f:
+                for i in range(len(df)):
+                    start = df["start"].values[i]
+                    end = df["end"].values[i]
+                    word = df["word"].values[i]
+                    f.write(f'{i+1}\n')
+                    f.write(
+                        f'{sec_to_timecode(start)} --> {sec_to_timecode(end)}\n')
+                    f.write(f'{word}\n\n')
 
 
 if __name__ == '__main__':
@@ -211,7 +210,28 @@ if __name__ == '__main__':
         'https://www.youtube.com/watch?v=cPAlAOD-Og4&list=PL_UeYNcd7KvpDfdqPILdqdeWVeaLVsjqz'
     )
     data_path = r'..\..\data'
+    # data_path = r'..\data'
+    run_time = []
+    error_videos = []
     for video_url in playlist.video_urls:
-        DataPreparation(video_url, data_path).trim_and_extract_audio()
-        # DataPreparation(video_url, data_path)()
+        try:
+            process = DataPreparation(video_url, data_path)
+            # start = time.time()
+            # process.transcribe_and_align()
+            # end = time.time()
+            # run_time.append(end - start)
+            # DataPreparation(video_url, data_path)()
+        except Exception as e:
+            print(f'Error when preparing {process.video_name}:')
+            print(e)
+            error_videos.append(video_url)
+
+    # Time measurement
+    # run_time = np.array(run_time)
+    # print(f'Longest run time: {run_time.max():.2f}s')
+    # print(f'Shortest run time: {run_time.min():.2f}s')
+    # print(f'Average run time: {run_time.mean():.2f}s')
+    # with open('error_videos.txt', 'w') as f:
+    #     print(*error_videos, sep='\n', file=f)
+
     print('\nPreparation completed!')

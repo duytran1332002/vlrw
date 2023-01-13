@@ -8,7 +8,7 @@ import kenlm
 import numpy as np
 from pyctcdecode import Alphabet, BeamSearchDecoderCTC, LanguageModel
 import IPython
-from wrapper import preprocess_transcript, align, write_csv
+from alignment import preprocess_transcript, align
 import pandas as pd
 import librosa
 
@@ -41,6 +41,8 @@ class SpeechToText:
     # map array to speech and get simple rate
     def map_to_array(self, batch):
         speech, sampling_rate = sf.read(batch["file"])
+        if len(speech.shape) == 1:
+            speech = speech[np.newaxis, :]
         batch["speech"] = speech
         batch["sampling_rate"] = sampling_rate
         return batch
@@ -72,6 +74,7 @@ class SpeechToText:
         if not os.path.exists(audio_path):
             print('File not found')
             return None
+        
         # load dummy dataset and read soundfiles
         ds = self.map_to_array({"file": audio_path})
         ds['speech'] = np.mean(ds['speech'], axis=1)
@@ -90,10 +93,9 @@ class SpeechToText:
 
         # get the predictions
         transcript = ''
-        # total_words = []
-        # total_word_align = []
         alignment = pd.DataFrame(columns=['start', 'end', 'word'])
-        for trim in range(0, len(audio_list)):
+        
+        for trim in range(len(audio_list)):
             # check cuda is available or not
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -114,27 +116,26 @@ class SpeechToText:
             transcription = self.processor.decode(predicted_ids)
             beam_search_output = self.ngram_lm_model.decode(
                 logits.cpu().detach().numpy(), beam_width=500)
-            # print("Beam search output: {}".format(beam_search_output))
+            print("Beam search output: {}".format(beam_search_output))
 
-            # align transcript
-            words, transcript_p, idx_word_p, idx_line_p = preprocess_transcript(
-                beam_search_output)
-            word_align, words = align(
-                audio_list[trim], ds['sampling_rate'],
-                words, transcript_p, idx_word_p, idx_line_p,
-                method='MTL_BDR', cuda=True
-            )
-            resolution = 256 / ds['sampling_rate'] * 3
-            word_time = np.array(word_align, dtype=np.float64)
-            word_time = word_time * resolution + f * trim
-            new_row = pd.DataFrame({'start': word_time[:, 0],
-                                    'end': word_time[:, 1],
-                                    'word': words})
-            print(new_row)
-            pd.concat([alignment, new_row], ignore_index=True)
-            # total_words.extend(words)
-            # total_word_align.extend(word_align)
+            # align transcript if there speech in the audio
+            if len(beam_search_output.strip()) > 0:
+                words, transcript_p, idx_word_p, idx_line_p = preprocess_transcript(
+                    beam_search_output)
+                word_align, words = align(
+                    audio_list[trim], ds['sampling_rate'],
+                    words, transcript_p, idx_word_p, idx_line_p,
+                    method='MTL_BDR', cuda=True
+                )
+                resolution = 256 / ds['sampling_rate'] * 3
+                word_time = np.array(word_align, dtype=np.float64)
+                word_time = word_time * resolution + trim * 10
+                new_rows = pd.DataFrame({'start': word_time[:, 0],
+                                         'end': word_time[:, 1],
+                                         'word': words})
+                alignment = pd.concat([alignment, new_rows], ignore_index=True)
             transcript += " " + beam_search_output
+            
             # clean up
             del (
                 input_values,
@@ -143,9 +144,10 @@ class SpeechToText:
                 transcription,
                 beam_search_output
             )
+            
             # empty cache
             torch.cuda.empty_cache()
-        # return transcript, total_words, total_word_align
+            
         return transcript, alignment
 
     def print_result(self, audio_path='data/speechtotext/test.wav'):
@@ -166,12 +168,12 @@ class SpeechToText:
                 aligned_transcript_path: str
                     Path to save aligned transcript csv file
         '''
-        transcript, total_words, total_word_align = self.transcribe(audio_path)
+        transcript, alignment = self.transcribe(audio_path)
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(transcript)
         print("Save transcript to file: ", transcript_path)
-        # alignment.to_csv(aligned_transcript_path, encoding='utf-8')
-        write_csv(16000, aligned_transcript_path, total_word_align, total_words)
+        alignment.to_csv(aligned_transcript_path,
+                         encoding='utf-8', index=False)
         print("Save transcript to file: ", aligned_transcript_path)
 
     def resampling(self, speech_array: np.ndarray,
