@@ -125,19 +125,23 @@ class SpeechToText:
         alignment = pd.DataFrame(columns=['start', 'end', 'word'])
 
         for trim in range(len(audio_list)):
-            transcript = self._transcribe_with_vector(
-                audio_vector=trim, ds=ds)
-            # print("Beam search output: {}".format(beam_search_output))
+            try:
+                line = self._transcribe_with_vector(
+                    audio_vector=audio_list[trim], ds=ds)
+                print("Beam search output: {}".format(transcript))
 
-            # align transcript if there speech in the audio
-            if len(transcript.strip()) > 0:
-                new_rows = self._align_with_vector(audio_list[trim],
-                                                   ds['sampling_rate'],
-                                                   transcript)
-                new_rows.loc[:, ['start', 'end']] += trim * 10
-                alignment = pd.concat([alignment, new_rows], ignore_index=True)
+                # align transcript if there speech in the audio
+                if len(transcript.strip()) > 0:
+                    new_rows = self._align_with_vector(audio_list[trim],
+                                                       ds['sampling_rate'],
+                                                       transcript)
+                    new_rows.loc[:, ['start', 'end']] += trim * 10
+                    alignment = pd.concat([alignment, new_rows],
+                                          ignore_index=True)
 
-            transcript += " " + transcript
+                transcript += " " + line
+            except RuntimeError:
+                pass
 
         return transcript, alignment
 
@@ -187,7 +191,7 @@ class SpeechToText:
 
     def save_result_to_file(self, audio_path: str,
                             transcript_path: str,
-                            aligned_transcript_path: str) -> None:
+                            csv_transcript_path: str) -> None:
         '''
             Save transcript as text file and aligned transcript as csv file
 
@@ -203,9 +207,9 @@ class SpeechToText:
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(transcript)
         print("Save transcript to file: ", transcript_path)
-        alignment.to_csv(aligned_transcript_path,
+        alignment.to_csv(csv_transcript_path,
                          encoding='utf-8', index=False)
-        print("Save transcript to file: ", aligned_transcript_path)
+        print("Save transcript to file: ", csv_transcript_path)
 
     @staticmethod
     def resampling(speech_array: np.ndarray,

@@ -9,7 +9,7 @@ import numpy as np
 
 
 class DataPreparation:
-    def __init__(self, video, data_path) -> None:
+    def __init__(self, video, speech2text, data_path) -> None:
         '''
             Initiate properties
 
@@ -19,7 +19,7 @@ class DataPreparation:
                 data_path: str
                     Path to data folder
         '''
-        self.video = YouTube(video_url)
+        self.video = video
 
         # Get video name
         date = re.search(r'(\d{1,2})\/(\d{1,2})\/(\d{4})', self.video.title)
@@ -29,6 +29,8 @@ class DataPreparation:
         day = date.group(1) if len(
             date.group(1)) > 1 else '0' + date.group(1)
         self.video_name = f'{year}{month}{day}.mp4'
+
+        self.speech2text = speech2text
 
         # Initiate data folders
         if not os.path.exists(data_path):
@@ -156,9 +158,9 @@ class DataPreparation:
 
         if not os.path.isfile(csv_transcript_path):
             print(f'Transcribing and aligning {audio_name}')
-            SpeechToText().save_result_to_file(audio_path,
-                                               transcript_path,
-                                               csv_transcript_path)
+            self.speech2text.save_result_to_file(audio_path,
+                                                 transcript_path,
+                                                 csv_transcript_path)
 
     def convert_to_srt(self):
         '''
@@ -210,27 +212,29 @@ if __name__ == '__main__':
         'https://www.youtube.com/watch?v=cPAlAOD-Og4&list=PL_UeYNcd7KvpDfdqPILdqdeWVeaLVsjqz'
     )
     data_path = r'..\..\data'
-    # data_path = r'..\data'
+    speech2text = SpeechToText()
     run_time = []
     error_videos = []
     for video_url in playlist.video_urls:
         try:
-            process = DataPreparation(video_url, data_path)
-            process()
-            # start = time.time()
-            # process.transcribe_and_align()
-            # end = time.time()
-            # run_time.append(end - start)
+            video = YouTube(video_url)
+            process = DataPreparation(video, speech2text, data_path)
+            start = time.time()
+            process.transcribe_and_align()
+            end = time.time()
+            run_time.append(end - start)
+            process.convert_to_srt()
+            # process()
         except Exception as e:
             print(f'Error when preparing {process.video_name}:')
             print(e)
             error_videos.append(process.video_name)
 
     # Time measurement
-    # run_time = np.array(run_time)
-    # print(f'Longest run time: {run_time.max():.2f}s')
-    # print(f'Shortest run time: {run_time.min():.2f}s')
-    # print(f'Average run time: {run_time.mean():.2f}s')
+    run_time = np.array(run_time)
+    print(f'Longest run time: {run_time.max():.2f}s')
+    print(f'Shortest run time: {run_time.min():.2f}s')
+    print(f'Average run time: {run_time.mean():.2f}s')
 
     # Save name of videos that cause error
     with open('error_videos.txt', 'w') as f:
