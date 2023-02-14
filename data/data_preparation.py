@@ -1,3 +1,4 @@
+import argparse
 import ffmpeg
 import os
 import pandas as pd
@@ -5,6 +6,7 @@ import re
 import time
 from pytube import YouTube, Playlist
 from speech_to_text import SpeechToText
+from utils import check_youtube_url
 import numpy as np
 
 
@@ -22,13 +24,17 @@ class DataPreparation:
         self.video = video
 
         # Get video name
-        date = re.search(r'(\d{1,2})\/(\d{1,2})\/(\d{4})', self.video.title)
-        year = date.group(3)
-        month = date.group(2) if len(
-            date.group(2)) > 1 else '0' + date.group(2)
-        day = date.group(1) if len(
-            date.group(1)) > 1 else '0' + date.group(1)
-        self.video_name = f'{year}{month}{day}.mp4'
+        if self.video is str:
+            self.video_name = self.video
+        else:
+            date = re.search(
+                r'(\d{1,2})\/(\d{1,2})\/(\d{4})', self.video.title)
+            year = date.group(3)
+            month = date.group(2) if len(
+                date.group(2)) > 1 else '0' + date.group(2)
+            day = date.group(1) if len(
+                date.group(1)) > 1 else '0' + date.group(1)
+            self.video_name = f'{year}{month}{day}.mp4'
 
         self.speech2text = speech2text
 
@@ -57,7 +63,8 @@ class DataPreparation:
 
     def __call__(self) -> None:
         # 1. Download video
-        self.download()
+        if self.video is not str:
+            self.download()
 
         # 2. Trim the first minute of video and
         #    extract audio
@@ -157,7 +164,7 @@ class DataPreparation:
         )
 
         if not os.path.isfile(csv_transcript_path):
-            print(f'\nTranscribing and aligning {audio_name}')
+            print(f'Transcribing and aligning {audio_name}')
             self.speech2text.save_result_to_file(audio_path,
                                                  transcript_path,
                                                  csv_transcript_path)
@@ -208,41 +215,112 @@ class DataPreparation:
 
 
 if __name__ == '__main__':
-    playlist = Playlist(
-        'https://www.youtube.com/watch?v=cPAlAOD-Og4&list=PL_UeYNcd7KvpDfdqPILdqdeWVeaLVsjqz'
-    )
-    data_path = r'..\..\data'
+    # playlist = Playlist(
+    #     'https://www.youtube.com/watch?v=cPAlAOD-Og4&list=PL_UeYNcd7KvpDfdqPILdqdeWVeaLVsjqz'
+    # )
+    # data_path = r'..\..\data'
+    # speech2text = SpeechToText()
+    # run_time = []
+    # error_videos = []
+    # for video_url in playlist.video_urls:
+    #     try:
+    #         video = YouTube(video_url)
+    #         process = DataPreparation(video, speech2text, data_path)
+    #         start = time.time()
+    #         process.transcribe_and_align()
+    #         end = time.time()
+    #         run_time.append(end - start)
+    #         process.convert_to_srt()
+    #         # process()
+    #         print('\n')
+    #     except Exception as e:
+    #         print(f'Error when preparing {process.video_name}:')
+    #         print(e)
+    #         error_videos.append(process.video_name)
+
+    # video = YouTube(video_url)
+    # process = DataPreparation(video, speech2text, data_path)
+    # process.transcribe_and_align()
+
+    # Time measurement
+    # run_time = np.array(run_time)
+    # print(f'Longest run time: {run_time.max():.2f}s')
+    # print(f'Shortest run time: {run_time.min():.2f}s')
+    # print(f'Average run time: {run_time.mean():.2f}s')
+
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('-m', '--mode', required=True,
+                            default=False,
+                            help='False-offline mode\nTrue-online mode')
+    arg_parser.add_argument('-u', '--url', required=False,
+                            default='https://www.youtube.com/watch?v=cPAlAOD-Og4&list=PL_UeYNcd7KvpDfdqPILdqdeWVeaLVsjqz',
+                            help='Link to YouTube video or playlist')
+    arg_parser.add_argument('-d', '--data-path', required=False,
+                            default=r'..\..\data',
+                            help='Path to the data folder')
+    arg_parser.add_argument('-n', '--num-videos', required=False,
+                            default=0,
+                            help='Number of videos needed to processed. Type 0 for all')
+    arg_parser.add_argument('-s', '--start-video', required=False,
+                            default=0,
+                            help='Index of video that we start processing')
+    arg_parser.add_argument('-e', '--end-video', required=False,
+                            default=-1,
+                            help='Index of video that we end processing. Type -1 for the last')
+    arg_parser.add_argument('-o', '--operation', required=False,
+                            default=0,
+                            help='0-all\n1-download\n2-trim and extract audio\n3-transcribe-and-align\n4-convert to srt')
+    args = vars(arg_parser.parse_args())
+
+    data_path = args['data-path']
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
     speech2text = SpeechToText()
-    run_time = []
     error_videos = []
-    for video_url in playlist.video_urls:
+
+    if args['mode']:
+        videos = check_youtube_url(args['url'])
+    if not args['mode'] or videos is None:
+        videos = os.listdir(os.path.join(data_path, 'raw_videos'))
+
+    if len(videos) >= args['num-videos'] > 0:
+        n_videos = args['num-videos']
+    else:
+        n_videos = len(videos)
+
+    if len(videos) > args['start-video'] >= 0:
+        start_video = args['start-video']
+    else:
+        start_video = 0
+
+    if len(videos) >= args['end-video'] > 0:
+        end_video = args['end-video']
+    else:
+        end_video = len(videos)
+
+    for i in range(start_video, end_video):
         try:
-            video = YouTube(video_url)
-            process = DataPreparation(video, speech2text, data_path)
-            print('\n')
-            start = time.time()
-            process.transcribe_and_align()
-            end = time.time()
-            run_time.append(end - start)
-            process.convert_to_srt()
-            # process()
+            process = DataPreparation(video=videos[i],
+                                      speech2text=speech2text,
+                                      data_path=data_path)
+            if args['operation'] == 1:
+                process.download()
+            elif args['operation'] == 2:
+                process.trim_and_extract_audio()
+            elif args['operation'] == 3:
+                process.transcribe_and_align()
+            elif args['operation'] == 4:
+                process.convert_to_srt()
+            else:
+                process()
         except Exception as e:
             print(f'Error when preparing {process.video_name}:')
             print(e)
             error_videos.append(process.video_name)
 
-        # video = YouTube(video_url)
-        # process = DataPreparation(video, speech2text, data_path)
-        # process.transcribe_and_align()
-
-    # Time measurement
-    run_time = np.array(run_time)
-    print(f'Longest run time: {run_time.max():.2f}s')
-    print(f'Shortest run time: {run_time.min():.2f}s')
-    print(f'Average run time: {run_time.mean():.2f}s')
-
     # Save name of videos that cause error
-    with open('error_videos.txt', 'w') as f:
-        print(*error_videos, sep='\n', file=f)
+    if error_videos != []:
+        with open('error_videos.txt', 'w') as f:
+            print(*error_videos, sep='\n', file=f)
 
-    print('\nPreparation completed!')
+    print('Preparation is completed!')

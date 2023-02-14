@@ -6,6 +6,7 @@ import librosa
 import string
 import warnings
 from g2p_en import G2p
+from pytube import YouTube, Playlist
 
 g2p = G2p()
 
@@ -506,3 +507,14 @@ def voc_to_contour(times, resolution, total_length, smoothing=False):
             pass
 
     return contour
+
+
+def check_youtube_url(url):
+    try:
+        try:
+            playlist = Playlist(url)
+            return [YouTube(video_url) for video_url in playlist.video_urls]
+        except:
+            return [YouTube(url)]
+    except:
+        return None
