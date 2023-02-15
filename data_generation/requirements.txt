@@ -5,7 +5,8 @@ musdb
 museval
 h5py
 tqdm
-torch==1.8.0
+# torch==1.8.0
+torch
 torchaudio
 tensorboard
 sortedcontainers
