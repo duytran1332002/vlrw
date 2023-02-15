@@ -71,7 +71,7 @@ Notes:
 |   |- word_videos/ (optional)
 ```
 * The `mode` includes:
-  * `override`: override existing files
+  * `override`: override existing files (default)
   * `skip`: if there is an existing file, do nothing
   * `append`: if there is an existing file, change the name of the duplicate
 
