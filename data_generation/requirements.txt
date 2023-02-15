@@ -1,0 +1,19 @@
+future
+numpy
+soundfile
+musdb
+museval
+h5py
+tqdm
+torch==1.8.0
+torchaudio
+tensorboard
+sortedcontainers
+youtube_dl
+g2p_en
+transformers==4.9.2 
+pyctcdecode==v0.1.0
+kenlm
+pytube
+pysrt
+moviepy == 1.0.3
