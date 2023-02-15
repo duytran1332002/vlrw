@@ -99,13 +99,22 @@ class InvertedResidualBlock(nn.Module):
             nn.BatchNorm2d(out_channels)
         )
 
+<<<<<<< HEAD
     def stochastic_depth(self, x):
+=======
+    def stochastic_depth(self, x): # Like dropout
+>>>>>>> testing
         if not self.training:
             return x
 
         binary_tensor = torch.rand(
+<<<<<<< HEAD
             x.shape[0], 1, 1, 1, device=x.device) < self.survival_prob
         return torch.div(x, self.survival_prob) * binary_tensor
+=======
+            x.shape[0], 1, 1, 1, device=x.device) < self.survival_prob  # ???
+        return torch.div(x, self.survival_prob) * binary_tensor  # Maintain mean, variant of x
+>>>>>>> testing
 
     def forward(self, inputs):
         x = self.expand_conv(inputs) if self.expand else inputs
@@ -121,7 +130,11 @@ class EfficientNet(nn.Module):
         super(EfficientNet, self).__init__()
         width_factor, depth_factor, droput_rate = self.calculate_factors(
             version)
+<<<<<<< HEAD
         last_channels = ceil(1280 * width_factor)
+=======
+        last_channels = ceil(1280 * width_factor)  # ???
+>>>>>>> testing
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.features = self.create_features()
         self.classifier = nn.Sequential(
@@ -164,4 +177,8 @@ class EfficientNet(nn.Module):
 
     def forward(self, x):
         x = self.pool(self.features(x))
+<<<<<<< HEAD
         return self.classifier(x.view(x.shape[0], 1))
+=======
+        return self.classifier(x.view(x.shape[0], 1))
+>>>>>>> testing
