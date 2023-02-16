@@ -128,25 +128,32 @@ def check_dir(dir):
         os.makedirs(dir)
 
 
-def find_differences(arr_a, arr_b):
+def find_differences(arr_a, arr_b, complement='both'):
     '''
-    Identify different elements between 2 arrays
+    Identify different elements
 
     Parameters:
         arr_a: list
             list of elements a
         arr_b: list
             list of elements b
+        complement: str
+            'both': return elements in arr_a and in arr_b except the union
+            'a': return elements in arr_a but not in arr_b
+            'b': return elements in arr_b but not in arr_a
 
     Returns:
         list
             list of different elements
     '''
-    set_a = set(arr_a)
-    set_b = set(arr_b)
-    if len(set_a) > len(set_b):
-        return list(set_a - set_b)
-    return list(set_b - set_a)
+    assert complement in ['both', 'a', 'b'], 'Invalid mode'
+    set_a, set_b = set(arr_a), set(arr_b)
+    intersection_set = set_a & set_b
+    if complement == 'a':
+        return list(set_a - intersection_set)
+    elif complement == 'b':
+        return list(set_b - intersection_set)
+    return list(set_a ^ set_b)
 
 
 args = load_args()
@@ -258,7 +265,7 @@ csv_paths = [os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
 check_dir(save_dir)
 
 # extract word-level video
-text_dict = dict()
+word_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word'])
 for video_path, srt_path, csv_path in zip(video_paths, srt_paths, csv_paths):
     # Load the video file
@@ -282,14 +289,14 @@ for video_path, srt_path, csv_path in zip(video_paths, srt_paths, csv_paths):
 
         # name the video
         date = os.path.basename(video_path)[:8]
-        text_dict[text] = text_dict.get(text, 0) + 1
-        file_name = f'{date}{str(text_dict[text]).zfill(5)}.mp4'
+        word_dict[text] = word_dict.get(text, 0) + 1
+        file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
         # if the name exists
         if file_name in os.listdir(label_dir):
             if args.mode == 'append':
                 while file_name in os.listdir(label_dir):
-                    text_dict[text] = text_dict.get(text, 0) + 1
-                    file_name = f'{date}{str(text_dict[text]).zfill(5)}.mp4'
+                    word_dict[text] = word_dict.get(text, 0) + 1
+                    file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
             elif args.mode == 'skip':
                 continue
         file_path = os.path.join(label_dir, file_name)
@@ -309,15 +316,27 @@ for video_path, srt_path, csv_path in zip(video_paths, srt_paths, csv_paths):
                                      'word': [row.word]})
             errors = pd.concat([errors, error_df], ignore_index=True)
 
+# save list of vocabularies
+vocab_path = os.path.join(args.data_dir, 'vocabs_sorted_list.txt')
+vocabs = list(word_dict.keys())
+old_vocabs = []
+if os.path.isfile(vocab_path):
+    with open(vocab_path, 'r', encoding='utf-8') as f:
+        old_vocabs = f.read().split()
+vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
+with open(vocab_path, 'w', encoding='utf-8') as f:
+    print(*vocabs, sep='\n', file=f)
+print(f'\nList of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
+
 # save error words
+print(f'\nThere are {len(errors)} words that cause error.')
 error_path = os.path.join(args.data_dir, 'errors.csv')
 if os.path.isfile(error_path):
     old_errors = pd.read_csv(error_path)
     errors = pd.concat([old_errors, errors], ignore_index=True)
     errors = errors.drop_duplicates()
 errors.to_csv(error_path, encoding='utf-8', index=False)
-print(f'\nThere are {len(errors)} words that cause error.')
-print(f'List of these words has been stored at: {error_path}')
+print(f'List of these error words has been stored at: {error_path}')
 
 # dealing with error words
 # TODO: complete this code
