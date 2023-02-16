@@ -547,3 +547,43 @@ def binary_seach(arr, target):
             high = mid - 1
 
     return -1
+
+
+def check_dir(dir):
+    '''
+    Check if the directory exists, if not, create it
+
+    Parameters:
+        dir: str
+            the directory to be checked
+    '''
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+
+def find_complement(arr_a, arr_b, complement='both'):
+    '''
+    Identify complement of two lists
+
+    Parameters:
+        arr_a: list
+            list of elements a
+        arr_b: list
+            list of elements b
+        complement: str
+            'both': return elements in arr_a and in arr_b except the union
+            'a': return elements in arr_a but not in arr_b
+            'b': return elements in arr_b but not in arr_a
+
+    Returns:
+        list
+            list of different elements
+    '''
+    assert complement in ['both', 'a', 'b'], 'Invalid mode'
+    set_a, set_b = set(arr_a), set(arr_b)
+    intersection_set = set_a & set_b
+    if complement == 'a':
+        return list(set_a - intersection_set)
+    elif complement == 'b':
+        return list(set_b - intersection_set)
+    return list(set_a ^ set_b)

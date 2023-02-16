@@ -3,7 +3,7 @@ import datetime
 import os
 import pandas as pd
 import pysrt
-from utils import binary_seach
+from utils import binary_seach, check_dir, find_complement
 from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
@@ -116,46 +116,6 @@ def cut_video(video, start, end, file_path):
     piece.write_videofile(file_path, fps=video.fps)
 
 
-def check_dir(dir):
-    '''
-    Check if the directory exists, if not, create it
-
-    Parameters:
-        dir: str
-            the directory to be checked
-    '''
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-
-
-def find_differences(arr_a, arr_b, complement='both'):
-    '''
-    Identify different elements
-
-    Parameters:
-        arr_a: list
-            list of elements a
-        arr_b: list
-            list of elements b
-        complement: str
-            'both': return elements in arr_a and in arr_b except the union
-            'a': return elements in arr_a but not in arr_b
-            'b': return elements in arr_b but not in arr_a
-
-    Returns:
-        list
-            list of different elements
-    '''
-    assert complement in ['both', 'a', 'b'], 'Invalid mode'
-    set_a, set_b = set(arr_a), set(arr_b)
-    intersection_set = set_a & set_b
-    if complement == 'a':
-        return list(set_a - intersection_set)
-    elif complement == 'b':
-        return list(set_b - intersection_set)
-    return list(set_a ^ set_b)
-
-
 args = load_args()
 
 # check mode
@@ -242,7 +202,7 @@ else:
 # check missing data
 video_dates = [video[:8] for video in videos]
 srt_dates = [srt_file[:8] for srt_file in srt_files]
-missing_dates = sorted(find_differences(srt_dates, video_dates))
+missing_dates = sorted(find_complement(srt_dates, video_dates))
 missing_files = []
 if len(missing_dates) > 0:
     for date in missing_dates:
