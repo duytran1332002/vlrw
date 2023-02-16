@@ -69,6 +69,10 @@ Notes:
 |   |- srt_transcripts/
 |   |- csv_transcripts/ (optional)
 |   |- word_videos/ (optional)
+|       |-<label>
+|           |-<date>_<id>.mp4
+|       |-ạ
+|           |-20220701_00001.mp4
 ```
 * The `mode` includes:
   * `override`: override existing files (default)
