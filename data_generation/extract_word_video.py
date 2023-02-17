@@ -3,6 +3,9 @@ import datetime
 import os
 import pandas as pd
 import pysrt
+from tqdm import tqdm
+import io
+import contextlib
 from utils import binary_seach, check_dir, find_complement
 from moviepy.video.io.VideoFileClip import VideoFileClip
 
@@ -112,8 +115,12 @@ def cut_video(video, start, end, file_path):
         file_path: str
             the path of the cut video
     '''
-    piece = video.subclip(start, end)
-    piece.write_videofile(file_path, fps=video.fps)
+    # with redirect_stdout(sys.stderr):
+    #     piece = video.subclip(start, end)
+    #     piece.write_videofile(file_path, fps=video.fps)
+    with contextlib.redirect_stdout(io.StringIO()):
+        piece = video.subclip(start, end)
+        piece.write_videofile(file_path, fps=video.fps)
 
 
 args = load_args()
@@ -227,7 +234,8 @@ check_dir(save_dir)
 # extract word-level video
 word_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word'])
-for video_path, srt_path, csv_path in zip(video_paths, srt_paths, csv_paths):
+paths = zip(video_paths, srt_paths, csv_paths)
+for video_path, srt_path, csv_path in tqdm(paths, desc='Videos'):
     # Load the video file
     video = VideoFileClip(video_path)
 
@@ -237,7 +245,7 @@ for video_path, srt_path, csv_path in zip(video_paths, srt_paths, csv_paths):
     df = pd.read_csv(csv_path, encoding='utf-8')
     # print(f'{type(df.start.iloc[0])} - {type(df.end.iloc[0])}')
 
-    for _, row in df.iterrows():
+    for _, row in tqdm(df.iterrows(), desc='Words', leave=False):
         # cut the video into smaller pieces
         start = row.start
         end = row.end
@@ -286,7 +294,8 @@ if os.path.isfile(vocab_path):
 vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
 with open(vocab_path, 'w', encoding='utf-8') as f:
     print(*vocabs, sep='\n', file=f)
-print(f'\nList of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
+print(f'\nThere are {len(set(vocabs) - set(word_dict.keys()))} new words.')
+print(f'List of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
 
 # save error words
 print(f'\nThere are {len(errors)} words that cause error.')
