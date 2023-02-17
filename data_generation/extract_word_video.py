@@ -294,7 +294,7 @@ if os.path.isfile(vocab_path):
 vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
 with open(vocab_path, 'w', encoding='utf-8') as f:
     print(*vocabs, sep='\n', file=f)
-print(f'\nThere are {len(set(vocabs) - set(word_dict.keys()))} new words.')
+print(f'\nThere are {len(set(word_dict.keys()) - set(vocabs))} new words.')
 print(f'List of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
 
 # save error words
