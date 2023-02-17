@@ -1,12 +1,13 @@
 import argparse
 import datetime
+import glob
 import os
 import pandas as pd
 import pysrt
 from tqdm import tqdm
 import io
 import contextlib
-from utils import binary_seach, check_dir, find_complement
+from utils import binary_seach, check_dir, find_complement, get_file_list
 from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
@@ -41,25 +42,27 @@ def load_args():
     parser.add_argument('--fix-error',
                         default=False,
                         help='Fix error word')
+    # TODO: Add sample threshold
 
     args = parser.parse_args()
     return args
 
 
-def change_boundary(time_boundary, time_change):
+def change_boundary(time_boundary: datetime.time,
+                    time_change: float) -> datetime.time:
     '''
     Change the boundary of a time object
 
     Parameters:
         time_boundary: datetime.time
-        time_change: int
+        time_change: float
             the change of time boundary in seconds
 
     returns:
         datetime.time
     '''
     dt = datetime.datetime.combine(datetime.date.today(), time_boundary)
-    if time_change > 0:
+    if time_change > 0 or time_change < dt.timestamp():
         dt += datetime.timedelta(seconds=time_change)
     else:
         dt -= datetime.timedelta(seconds=-time_change)
@@ -157,19 +160,22 @@ video_paths = []
 if os.path.isdir(video_dir):
     videos = os.listdir(video_dir)
     # implement binary search to find start video
-    if args.start_date is not None:
-        start_idx = binary_seach(videos, args.start_date + '.mp4')
-        if start_idx == -1:
-            raise Exception('Invalid start date')
-    else:
-        start_idx = 0
-    # implement binary search to find end video
-    if args.end_date is not None:
-        end_idx = binary_seach(videos, args.end_date + '.mp4')
-        if end_idx == -1:
-            raise Exception('Invalid end date')
-    else:
-        end_idx = len(videos) - 1
+    # if args.start_date is not None:
+    #     start_idx = binary_seach(videos, args.start_date + '.mp4')
+    #     if start_idx == -1:
+    #         raise Exception('Invalid start date')
+    # else:
+    #     start_idx = 0
+    # # implement binary search to find end video
+    # if args.end_date is not None:
+    #     end_idx = binary_seach(videos, args.end_date + '.mp4')
+    #     if end_idx == -1:
+    #         raise Exception('Invalid end date')
+    # else:
+    #     end_idx = len(videos) - 1
+    start_idx, end_idx = get_file_list(files=videos,
+                                       start=args.start_date,
+                                       end=args.end_date)
     # get list of videos from start to end
     videos = videos[start_idx:end_idx+1]
     video_paths = [os.path.join(video_dir, video)
@@ -184,19 +190,22 @@ srt_paths = []
 if os.path.isdir(srt_dir):
     srt_files = os.listdir(srt_dir)
     # implement binary search to find start srt file
-    if args.start_date is not None:
-        start_idx = binary_seach(srt_files, args.start_date + '.srt')
-        if start_idx == -1:
-            raise Exception('Invalid start date')
-    else:
-        start_idx = 0
-    # implement binary search to find end srt file
-    if args.end_date is not None:
-        end_idx = binary_seach(srt_files, args.end_date + '.srt')
-        if end_idx == -1:
-            raise Exception('Invalid end date')
-    else:
-        end_idx = len(srt_files) - 1
+    # if args.start_date is not None:
+    #     start_idx = binary_seach(srt_files, args.start_date + '.srt')
+    #     if start_idx == -1:
+    #         raise Exception('Invalid start date')
+    # else:
+    #     start_idx = 0
+    # # implement binary search to find end srt file
+    # if args.end_date is not None:
+    #     end_idx = binary_seach(srt_files, args.end_date + '.srt')
+    #     if end_idx == -1:
+    #         raise Exception('Invalid end date')
+    # else:
+    #     end_idx = len(srt_files) - 1
+    start_idx, end_idx = get_file_list(files=srt_files,
+                                       start=args.start_date,
+                                       end=args.end_date)
     # get list of srt files from start to end
     srt_files = srt_files[start_idx:end_idx+1]
     srt_paths = [os.path.join(srt_dir, srt_file)
@@ -231,11 +240,16 @@ csv_paths = [os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
 # check save_dir
 check_dir(save_dir)
 
-# extract word-level video
+
 word_dict = dict()
-errors = pd.DataFrame(columns=['date', 'start', 'end', 'word'])
+errors = pd.DataFrame(columns=['date', 'start', 'end', 'word', 'error'])
 paths = zip(video_paths, srt_paths, csv_paths)
-for video_path, srt_path, csv_path in tqdm(paths, desc='Videos'):
+# extract word-level video
+for video_path, srt_path, csv_path in tqdm(paths,
+                                           total=len(video_paths),
+                                           desc='Videos',
+                                           unit=' video',
+                                           dynamic_ncols=True):
     # Load the video file
     video = VideoFileClip(video_path)
 
@@ -245,7 +259,12 @@ for video_path, srt_path, csv_path in tqdm(paths, desc='Videos'):
     df = pd.read_csv(csv_path, encoding='utf-8')
     # print(f'{type(df.start.iloc[0])} - {type(df.end.iloc[0])}')
 
-    for _, row in tqdm(df.iterrows(), desc='Words', leave=False):
+    for _, row in tqdm(df.iterrows(),
+                       total=len(df),
+                       desc='Words',
+                       unit=' word',
+                       leave=False,
+                       dynamic_ncols=True):
         # cut the video into smaller pieces
         start = row.start
         end = row.end
@@ -275,14 +294,22 @@ for video_path, srt_path, csv_path in tqdm(paths, desc='Videos'):
         except KeyboardInterrupt:
             os._exit(0)
         except Exception as e:
-            print(f'Error when process {file_name}')
-            print(e)
+            # print(f'Error when process {file_name}')
+            # print(e)
             # print(f'{type(row.start)} - {type(row.end)}')
             error_df = pd.DataFrame({'date': [file_name[:8]],
                                      'start': [row.start],
                                      'end': [row.end],
-                                     'word': [row.word]})
+                                     'word': [row.word],
+                                     'error': [e]})
             errors = pd.concat([errors, error_df], ignore_index=True)
+
+
+# delete leftover files
+leftover_files = glob.glob('*.mp3')
+for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
+    os.remove(file)
+
 
 # save list of vocabularies
 vocab_path = os.path.join(args.data_dir, 'vocabs_sorted_list.txt')
@@ -297,6 +324,7 @@ with open(vocab_path, 'w', encoding='utf-8') as f:
 print(f'\nThere are {len(set(word_dict.keys()) - set(vocabs))} new words.')
 print(f'List of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
 
+
 # save error words
 print(f'\nThere are {len(errors)} words that cause error.')
 error_path = os.path.join(args.data_dir, 'errors.csv')
@@ -306,6 +334,7 @@ if os.path.isfile(error_path):
     errors = errors.drop_duplicates()
 errors.to_csv(error_path, encoding='utf-8', index=False)
 print(f'List of these error words has been stored at: {error_path}')
+
 
 # dealing with error words
 # TODO: complete this code
