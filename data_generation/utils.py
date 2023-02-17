@@ -587,3 +587,37 @@ def find_complement(arr_a, arr_b, complement='both'):
     elif complement == 'b':
         return list(set_b - intersection_set)
     return list(set_a ^ set_b)
+
+
+def get_file_list(files: list, start=None, end=None):
+    '''
+    Get particular files (from start to end) in an ordered list.
+
+    Parameters:
+        files: list
+            list of files
+        start: str
+            start file
+        end: str
+            end file
+
+    Returns:
+        list
+            list of files from start to end
+    '''
+    extension = os.path.splitext(files[0])[1]
+    # implement binary search to find start srt file
+    if start is not None:
+        start_idx = binary_seach(files, start + extension)
+        if start_idx == -1:
+            raise Exception('Invalid start date')
+    else:
+        start_idx = 0
+    # implement binary search to find end srt file
+    if end is not None:
+        end_idx = binary_seach(files, end + extension)
+        if end_idx == -1:
+            raise Exception('Invalid end date')
+    else:
+        end_idx = len(files) - 1
+    return files[start_idx:end_idx+1]
