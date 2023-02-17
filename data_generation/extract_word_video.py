@@ -118,9 +118,6 @@ def cut_video(video, start, end, file_path):
         file_path: str
             the path of the cut video
     '''
-    # with redirect_stdout(sys.stderr):
-    #     piece = video.subclip(start, end)
-    #     piece.write_videofile(file_path, fps=video.fps)
     with contextlib.redirect_stdout(io.StringIO()):
         piece = video.subclip(start, end)
         piece.write_videofile(file_path, fps=video.fps)
@@ -158,29 +155,14 @@ else:
 # get list of video paths
 video_paths = []
 if os.path.isdir(video_dir):
-    videos = os.listdir(video_dir)
-    # implement binary search to find start video
-    # if args.start_date is not None:
-    #     start_idx = binary_seach(videos, args.start_date + '.mp4')
-    #     if start_idx == -1:
-    #         raise Exception('Invalid start date')
-    # else:
-    #     start_idx = 0
-    # # implement binary search to find end video
-    # if args.end_date is not None:
-    #     end_idx = binary_seach(videos, args.end_date + '.mp4')
-    #     if end_idx == -1:
-    #         raise Exception('Invalid end date')
-    # else:
-    #     end_idx = len(videos) - 1
-    start_idx, end_idx = get_file_list(files=videos,
-                                       start=args.start_date,
-                                       end=args.end_date)
     # get list of videos from start to end
-    videos = videos[start_idx:end_idx+1]
+    videos = get_file_list(files=os.listdir(video_dir),
+                           start=args.start_date,
+                           end=args.end_date)
     video_paths = [os.path.join(video_dir, video)
                    for video in videos]
 elif os.path.isfile(video_dir):
+    videos = [os.path.basename(video_dir)]
     video_paths.append(video_dir)
 else:
     raise Exception('Invalid video(s)')
@@ -188,29 +170,14 @@ else:
 # get list of srt paths
 srt_paths = []
 if os.path.isdir(srt_dir):
-    srt_files = os.listdir(srt_dir)
-    # implement binary search to find start srt file
-    # if args.start_date is not None:
-    #     start_idx = binary_seach(srt_files, args.start_date + '.srt')
-    #     if start_idx == -1:
-    #         raise Exception('Invalid start date')
-    # else:
-    #     start_idx = 0
-    # # implement binary search to find end srt file
-    # if args.end_date is not None:
-    #     end_idx = binary_seach(srt_files, args.end_date + '.srt')
-    #     if end_idx == -1:
-    #         raise Exception('Invalid end date')
-    # else:
-    #     end_idx = len(srt_files) - 1
-    start_idx, end_idx = get_file_list(files=srt_files,
-                                       start=args.start_date,
-                                       end=args.end_date)
     # get list of srt files from start to end
-    srt_files = srt_files[start_idx:end_idx+1]
+    srt_files = get_file_list(files=os.listdir(srt_dir),
+                              start=args.start_date,
+                              end=args.end_date)
     srt_paths = [os.path.join(srt_dir, srt_file)
                  for srt_file in srt_files]
 elif os.path.isfile(srt_dir):
+    srt_files = [os.path.basename(srt_dir)]
     srt_paths.append(srt_dir)
 else:
     raise Exception('Invalid srt(s)')
@@ -241,6 +208,7 @@ csv_paths = [os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
 check_dir(save_dir)
 
 
+no_of_samples = 0
 word_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word', 'error'])
 paths = zip(video_paths, srt_paths, csv_paths)
@@ -291,6 +259,7 @@ for video_path, srt_path, csv_path in tqdm(paths,
         # start extracting
         try:
             cut_video(video, start, end, file_path)
+            no_of_samples += 1
         except KeyboardInterrupt:
             os._exit(0)
         except Exception as e:
@@ -311,6 +280,22 @@ for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
     os.remove(file)
 
 
+# save word dictionary into csv
+freq_path = os.path.join(args.data_dir, 'word_freq.csv')
+freq_df = pd.DataFrame(list(word_dict.items()), columns=['word', 'frequency'])
+print(f'\nThere are {freq_df.frequency.sum()} samples in total and', end=' ')
+print(f'{no_of_samples} new samples from this run.')
+if os.path.isfile(freq_path):
+    old_freq_df = pd.read_csv(freq_path)
+    freq_df = (pd
+               .concat([old_freq_df, freq_df], ignore_index=True)
+               .groupby('word')
+               .sum())
+freq_df.to_csv(freq_path, index=False)
+print(f'Now there are {freq_df.frequency.sum()} samples in the database.')
+print(f'The vocabularies\' frequency has been stored at: {freq_path}.')
+
+
 # save list of vocabularies
 vocab_path = os.path.join(args.data_dir, 'vocabs_sorted_list.txt')
 vocabs = list(word_dict.keys())
@@ -322,7 +307,8 @@ vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
 with open(vocab_path, 'w', encoding='utf-8') as f:
     print(*vocabs, sep='\n', file=f)
 print(f'\nThere are {len(set(word_dict.keys()) - set(vocabs))} new words.')
-print(f'List of {len(vocabs)} vocabularies has been stored at: {vocab_path}')
+print(f'Now there are {len(vocabs)} vocabularies in the database.')
+print(f'List of them has been stored at: {vocab_path}.')
 
 
 # save error words
@@ -333,7 +319,7 @@ if os.path.isfile(error_path):
     errors = pd.concat([old_errors, errors], ignore_index=True)
     errors = errors.drop_duplicates()
 errors.to_csv(error_path, encoding='utf-8', index=False)
-print(f'List of these error words has been stored at: {error_path}')
+print(f'List of these error words has been stored at: {error_path}.')
 
 
 # dealing with error words
