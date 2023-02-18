@@ -18,3 +18,4 @@ kenlm
 pytube
 pysrt
 moviepy == 1.0.3
+wordcloud
