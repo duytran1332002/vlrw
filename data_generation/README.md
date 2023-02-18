@@ -65,14 +65,17 @@ Notes:
 * If `data-dir` is provided, there is no need to provide `video-dir`, `srt-dir`, `csv-dir` and `save-dir`. However, `data-dir` must have at least the structure as follow. Its sub-folder must be remained the exact name.
 ```
 |- data/
+|   |- vocabs_sorted_list.txt (generated when run)
+|   |- missing_files.txt (generated when run)
+|   |- errors.csv (generated when run)
 |   |- videos/
 |   |- srt_transcripts/
 |   |- csv_transcripts/ (optional)
 |   |- word_videos/ (optional)
 |       |-<label>
-|           |-<date>_<id>.mp4
+|           |-<date><id>.mp4
 |       |-ạ
-|           |-20220701_00001.mp4
+|           |-2022070100001.mp4
 ```
 * The `mode` includes:
   * `override`: override existing files (default)
