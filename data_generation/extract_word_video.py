@@ -37,7 +37,7 @@ def load_args():
                         help='How to deal with existing files \
                               override, skip or append')
     parser.add_argument('--save-csv',
-                        default=False,
+                        default=True,
                         help='save srt to csv')
     parser.add_argument('--csv-dir',
                         default=None,
@@ -293,7 +293,7 @@ if os.path.isfile(freq_path):
                .concat([old_freq_df, freq_df], ignore_index=True)
                .groupby('word')
                .sum())
-freq_df.to_csv(freq_path, index=False)
+freq_df.to_csv(freq_path, index=True)
 print(f'Now there are {freq_df.frequency.sum()} samples in the database.')
 print(f'The vocabularies\' frequency has been stored at: {freq_path}.')
 
