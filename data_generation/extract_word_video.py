@@ -23,9 +23,6 @@ def load_args():
     parser.add_argument('--srt-dir',
                         default=None,
                         help='srt directory')
-    parser.add_argument('--csv-dir',
-                        default=None,
-                        help='csv directory')
     parser.add_argument('--save-dir',
                         default=None,
                         help='the directory of saving word-level video')
@@ -39,6 +36,12 @@ def load_args():
                         default='override',
                         help='How to deal with existing files \
                               override, skip or append')
+    parser.add_argument('--save-csv',
+                        default=False,
+                        help='save srt to csv')
+    parser.add_argument('--csv-dir',
+                        default=None,
+                        help='csv directory')
     parser.add_argument('--fix-error',
                         default=False,
                         help='Fix error word')
@@ -70,9 +73,9 @@ def change_boundary(time_boundary: datetime.time,
     return dt.time()
 
 
-def convert_srt_to_csv(srt_path, csv_path):
+def read_srt_to_df(srt_path):
     '''
-    Convert srt file to csv file
+    Read srt file to pandas.dataframe
 
     Parameters:
         srt_path: str
@@ -87,6 +90,7 @@ def convert_srt_to_csv(srt_path, csv_path):
     subs = pysrt.open(srt_path, encoding='utf-8')
     words = pd.DataFrame(columns=['start', 'end', 'word'])
 
+    # TODO: convert small second to mircosecond
     for sub in subs:
         # add padding to start time
         start = change_boundary(time_boundary=sub.start.to_time(),
@@ -96,11 +100,11 @@ def convert_srt_to_csv(srt_path, csv_path):
         end = change_boundary(time_boundary=sub.end.to_time(),
                               time_change=0.01)
 
-        word = pd.DataFrame({'start': [start],
-                             'end': [end],
+        word = pd.DataFrame({'start': [start.strftime('%H:%M:%S.%f')],
+                             'end': [end.strftime('%H:%M:%S.%f')],
                              'word': [sub.text]})
         words = pd.concat([words, word], ignore_index=True)
-    words.to_csv(csv_path, index=False)
+
     return words
 
 
@@ -200,9 +204,8 @@ if len(missing_dates) > 0:
         print(*missing_files, sep='\n', file=f)
 
 # get list of csv paths
-check_dir(csv_dir)
-csv_paths = [os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
-             for srt_name in os.listdir(srt_dir)]
+if args.save_csv:
+    check_dir(csv_dir)
 
 # check save_dir
 check_dir(save_dir)
@@ -211,21 +214,21 @@ check_dir(save_dir)
 no_of_samples = 0
 word_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word', 'error'])
-paths = zip(video_paths, srt_paths, csv_paths)
 # extract word-level video
-for video_path, srt_path, csv_path in tqdm(paths,
-                                           total=len(video_paths),
-                                           desc='Videos',
-                                           unit=' video',
-                                           dynamic_ncols=True):
+for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
+                                 total=len(video_paths),
+                                 desc='Videos',
+                                 unit=' video',
+                                 dynamic_ncols=True):
     # Load the video file
     video = VideoFileClip(video_path)
 
     # read srt to dataframe
-    df = convert_srt_to_csv(srt_path, csv_path)
-    # TODO: avoid read from disk
-    df = pd.read_csv(csv_path, encoding='utf-8')
-    # print(f'{type(df.start.iloc[0])} - {type(df.end.iloc[0])}')
+    df = read_srt_to_df(srt_path)
+    if args.save_csv:
+        srt_name = os.path.basename(srt_path)
+        csv_path = os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
+        df.to_csv(csv_path, index=False)
 
     for _, row in tqdm(df.iterrows(),
                        total=len(df),
@@ -265,7 +268,6 @@ for video_path, srt_path, csv_path in tqdm(paths,
         except Exception as e:
             # print(f'Error when process {file_name}')
             # print(e)
-            # print(f'{type(row.start)} - {type(row.end)}')
             error_df = pd.DataFrame({'date': [file_name[:8]],
                                      'start': [row.start],
                                      'end': [row.end],
@@ -280,7 +282,7 @@ for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
     os.remove(file)
 
 
-# save word dictionary into csv
+# save word frequency into csv
 freq_path = os.path.join(args.data_dir, 'word_freq.csv')
 freq_df = pd.DataFrame(list(word_dict.items()), columns=['word', 'frequency'])
 print(f'\nThere are {freq_df.frequency.sum()} samples in total and', end=' ')
