@@ -1,3 +1,4 @@
+import csv
 import os
 import soundfile
 import torch
@@ -633,3 +634,15 @@ def check_data_dir(data_dir, dir_names):
         dirs.append(dir)
         check_dir(dir)
     return dirs
+
+
+def read_csv_to_list(csv_path):
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        return list(reader)
+
+
+def convert_column_datatype(arr, column, datatype):
+    for i in range(len(arr)):
+        arr[i][column] = datatype(arr[i][column])
+    return arr
