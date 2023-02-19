@@ -126,29 +126,49 @@ def cut_video(video, start, end, file_path):
         piece.write_videofile(file_path, fps=video.fps)
 
 
-args = load_args()
+# args = load_args()
+
+# data_dir = args.data_dir
+# video_dir = args.video_dir
+# srt_dir = args.srt_dir
+# save_dir = args.save_dir
+# start_date = args.start_date
+# end_date = args.end_date
+# mode = args.mode
+# save_csv = args.save_csv
+# csv_dir = args.csv_dir
+
+
+# for debugging
+data_dir = r'D:\Coding\LipReadingProject\test_data'
+video_dir = None
+srt_dir = None
+save_dir = None
+start_date = '20220810'
+end_date = '20221227'
+mode = 'override'
+save_csv = True
+csv_dir = None
+
 
 # check mode
-assert args.mode in ['override', 'skip', 'append'], 'Invalid mode'
+assert mode in ['override', 'skip', 'append'], 'Invalid mode'
+
 
 # if user provides a data directory
-if args.data_dir is not None:
+if data_dir is not None:
     dir_names = ['videos', 'srt_transcripts', 'csv_transcripts', 'word_videos']
-    video_dir, srt_dir, csv_dir, save_dir = check_data_dir(args.data_dir,
+    video_dir, srt_dir, csv_dir, save_dir = check_data_dir(data_dir,
                                                            dir_names)
-else:
-    video_dir = args.video_dir
-    srt_dir = args.srt_dir
-    csv_dir = args.csv_dir
-    save_dir = args.save_dir
+
 
 # get list of video paths
 video_paths = []
 if os.path.isdir(video_dir):
     # get list of videos from start to end
     videos = get_file_list(files=os.listdir(video_dir),
-                           start=args.start_date,
-                           end=args.end_date)
+                           start=start_date,
+                           end=end_date)
     video_paths = [os.path.join(video_dir, video)
                    for video in videos]
 elif os.path.isfile(video_dir):
@@ -157,13 +177,14 @@ elif os.path.isfile(video_dir):
 else:
     raise Exception('Invalid video(s)')
 
+
 # get list of srt paths
 srt_paths = []
 if os.path.isdir(srt_dir):
     # get list of srt files from start to end
     srt_files = get_file_list(files=os.listdir(srt_dir),
-                              start=args.start_date,
-                              end=args.end_date)
+                              start=start_date,
+                              end=end_date)
     srt_paths = [os.path.join(srt_dir, srt_file)
                  for srt_file in srt_files]
 elif os.path.isfile(srt_dir):
@@ -171,6 +192,7 @@ elif os.path.isfile(srt_dir):
     srt_paths.append(srt_dir)
 else:
     raise Exception('Invalid srt(s)')
+
 
 # check missing data
 video_dates = [video[:8] for video in videos]
@@ -186,12 +208,14 @@ if len(missing_dates) > 0:
             missing_files.append(f'{date}.mp4')
             srt_paths.remove(os.path.join(srt_dir, f'{date}.srt'))
     # save missing files
-    with open(os.path.join(args.data_dir, 'missing_files.txt'), 'a') as f:
+    with open(os.path.join(data_dir, 'missing_files.txt'), 'a') as f:
         print(*missing_files, sep='\n', file=f)
 
+
 # get list of csv paths
-if args.save_csv:
+if save_csv:
     check_dir(csv_dir)
+
 
 # check save_dir
 check_dir(save_dir)
@@ -211,7 +235,7 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
 
     # read srt to dataframe
     df = read_srt_to_df(srt_path)
-    if args.save_csv:
+    if save_csv:
         srt_name = os.path.basename(srt_path)
         csv_path = os.path.join(csv_dir, srt_name.replace('srt', 'csv'))
         df.to_csv(csv_path, index=False)
@@ -221,8 +245,7 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
                        desc='Words',
                        unit=' word',
                        leave=False,
-                       dynamic_ncols=True,
-                       postfix=f'Number of sample: {n_sample}'):
+                       dynamic_ncols=True):
         # cut the video into smaller pieces
         start = row.start
         end = row.end
@@ -238,11 +261,11 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
         file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
         # if the name exists
         if file_name in os.listdir(label_dir):
-            if args.mode == 'append':
+            if mode == 'append':
                 while file_name in os.listdir(label_dir):
                     word_dict[text] = word_dict.get(text, 0) + 1
                     file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
-            elif args.mode == 'skip':
+            elif mode == 'skip':
                 continue
         file_path = os.path.join(label_dir, file_name)
 
@@ -270,7 +293,7 @@ for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
 
 
 # save word frequency into csv
-freq_path = os.path.join(args.data_dir, 'word_freq.csv')
+freq_path = os.path.join(data_dir, 'word_freq.csv')
 freq_df = pd.DataFrame(list(word_dict.items()), columns=['word', 'frequency'])
 print(f'\nThere are {freq_df.frequency.sum()} samples in total and', end=' ')
 print(f'{n_sample} new samples from this run.')
@@ -286,7 +309,7 @@ print(f'The vocabularies\' frequency has been stored at: {freq_path}.')
 
 
 # save list of vocabularies
-vocab_path = os.path.join(args.data_dir, 'vocabs_sorted_list.txt')
+vocab_path = os.path.join(data_dir, 'vocabs_sorted_list.txt')
 vocabs = list(word_dict.keys())
 old_vocabs = []
 if os.path.isfile(vocab_path):
@@ -302,7 +325,7 @@ print(f'List of them has been stored at: {vocab_path}.')
 
 # save error words
 print(f'\nThere are {len(errors)} words that cause error.')
-error_path = os.path.join(args.data_dir, 'errors.csv')
+error_path = os.path.join(data_dir, 'errors.csv')
 if os.path.isfile(error_path):
     old_errors = pd.read_csv(error_path)
     errors = pd.concat([old_errors, errors], ignore_index=True)
