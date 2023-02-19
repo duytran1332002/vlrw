@@ -7,7 +7,7 @@ import pysrt
 from tqdm import tqdm
 import io
 import contextlib
-from utils import binary_seach, check_dir, find_complement, get_file_list
+from utils import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
@@ -45,7 +45,6 @@ def load_args():
     parser.add_argument('--fix-error',
                         default=False,
                         help='Fix error word')
-    # TODO: Add sample threshold
 
     args = parser.parse_args()
     return args
@@ -132,24 +131,11 @@ args = load_args()
 # check mode
 assert args.mode in ['override', 'skip', 'append'], 'Invalid mode'
 
-# if user provide a data directory
+# if user provides a data directory
 if args.data_dir is not None:
-    # get video directory
-    video_dir = os.path.join(args.data_dir, 'videos')
-    if not os.path.exists(video_dir):
-        os.makedirs(video_dir)
-    # get srt directory
-    srt_dir = os.path.join(args.data_dir, 'srt_transcripts')
-    if not os.path.exists(srt_dir):
-        os.makedirs(srt_dir)
-    # get csv directory
-    csv_dir = os.path.join(args.data_dir, 'csv_transcripts')
-    if not os.path.exists(csv_dir):
-        os.makedirs(csv_dir)
-    # get save directory
-    save_dir = os.path.join(args.data_dir, 'word_videos')
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
+    dir_names = ['videos', 'srt_transcripts', 'csv_transcripts', 'word_videos']
+    video_dir, srt_dir, csv_dir, save_dir = check_data_dir(args.data_dir,
+                                                           dir_names)
 else:
     video_dir = args.video_dir
     srt_dir = args.srt_dir
@@ -211,7 +197,7 @@ if args.save_csv:
 check_dir(save_dir)
 
 
-no_of_samples = 0
+n_sample = 0
 word_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word', 'error'])
 # extract word-level video
@@ -235,7 +221,8 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
                        desc='Words',
                        unit=' word',
                        leave=False,
-                       dynamic_ncols=True):
+                       dynamic_ncols=True,
+                       postfix=f'Number of sample: {n_sample}'):
         # cut the video into smaller pieces
         start = row.start
         end = row.end
@@ -259,10 +246,10 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
                 continue
         file_path = os.path.join(label_dir, file_name)
 
-        # start extracting
+        # cut video
         try:
             cut_video(video, start, end, file_path)
-            no_of_samples += 1
+            n_sample += 1
         except KeyboardInterrupt:
             os._exit(0)
         except Exception as e:
@@ -286,7 +273,7 @@ for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
 freq_path = os.path.join(args.data_dir, 'word_freq.csv')
 freq_df = pd.DataFrame(list(word_dict.items()), columns=['word', 'frequency'])
 print(f'\nThere are {freq_df.frequency.sum()} samples in total and', end=' ')
-print(f'{no_of_samples} new samples from this run.')
+print(f'{n_sample} new samples from this run.')
 if os.path.isfile(freq_path):
     old_freq_df = pd.read_csv(freq_path)
     freq_df = (pd
