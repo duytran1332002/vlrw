@@ -7,6 +7,7 @@ import pysrt
 from tqdm import tqdm
 import io
 import contextlib
+import csv
 from utils import *
 from moviepy.video.io.VideoFileClip import VideoFileClip
 
@@ -126,29 +127,29 @@ def cut_video(video, start, end, file_path):
         piece.write_videofile(file_path, fps=video.fps)
 
 
-# args = load_args()
+args = load_args()
 
-# data_dir = args.data_dir
-# video_dir = args.video_dir
-# srt_dir = args.srt_dir
-# save_dir = args.save_dir
-# start_date = args.start_date
-# end_date = args.end_date
-# mode = args.mode
-# save_csv = args.save_csv
-# csv_dir = args.csv_dir
+data_dir = args.data_dir
+video_dir = args.video_dir
+srt_dir = args.srt_dir
+save_dir = args.save_dir
+start_date = args.start_date
+end_date = args.end_date
+mode = args.mode
+save_csv = args.save_csv
+csv_dir = args.csv_dir
 
 
 # for debugging
-data_dir = r'D:\Coding\LipReadingProject\test_data'
-video_dir = None
-srt_dir = None
-save_dir = None
-start_date = '20220810'
-end_date = '20221227'
-mode = 'override'
-save_csv = True
-csv_dir = None
+# data_dir = r'D:\Coding\LipReadingProject\test_data'
+# video_dir = None
+# srt_dir = None
+# save_dir = None
+# start_date = '20220810'
+# end_date = '20221227'
+# mode = 'override'
+# save_csv = True
+# csv_dir = None
 
 
 # check mode
@@ -221,8 +222,8 @@ if save_csv:
 check_dir(save_dir)
 
 
-n_sample = 0
-word_dict = dict()
+freq_dict = dict()
+new_freq_dict = dict()
 errors = pd.DataFrame(columns=['date', 'start', 'end', 'word', 'error'])
 # extract word-level video
 for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
@@ -249,22 +250,22 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
         # cut the video into smaller pieces
         start = row.start
         end = row.end
-        text = row.word
+        word = row.word
 
         # check word folder
-        label_dir = os.path.join(save_dir, text)
+        label_dir = os.path.join(save_dir, word)
         check_dir(label_dir)
 
         # name the video
         date = os.path.basename(video_path)[:8]
-        word_dict[text] = word_dict.get(text, 0) + 1
-        file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
+        freq_dict[word] = freq_dict.get(word, 0) + 1
+        file_name = f'{date}{str(freq_dict[word]).zfill(5)}.mp4'
         # if the name exists
         if file_name in os.listdir(label_dir):
             if mode == 'append':
                 while file_name in os.listdir(label_dir):
-                    word_dict[text] = word_dict.get(text, 0) + 1
-                    file_name = f'{date}{str(word_dict[text]).zfill(5)}.mp4'
+                    freq_dict[word] = freq_dict.get(word, 0) + 1
+                    file_name = f'{date}{str(freq_dict[word]).zfill(5)}.mp4'
             elif mode == 'skip':
                 continue
         file_path = os.path.join(label_dir, file_name)
@@ -272,7 +273,7 @@ for video_path, srt_path in tqdm(zip(video_paths, srt_paths),
         # cut video
         try:
             cut_video(video, start, end, file_path)
-            n_sample += 1
+            new_freq_dict[word] = new_freq_dict.get(word, 0) + 1
         except KeyboardInterrupt:
             os._exit(0)
         except Exception as e:
@@ -294,23 +295,25 @@ for file in tqdm(leftover_files, desc='Cleaning', unit='iter'):
 
 # save word frequency into csv
 freq_path = os.path.join(data_dir, 'word_freq.csv')
-freq_df = pd.DataFrame(list(word_dict.items()), columns=['word', 'frequency'])
-print(f'\nThere are {freq_df.frequency.sum()} samples in total and', end=' ')
-print(f'{n_sample} new samples from this run.')
+print(f'\nTotal sample in this run: {sum(list(freq_dict.values()))}')
+print(
+    f'Number of new samples from this run: {sum(list(new_freq_dict.values()))}')
 if os.path.isfile(freq_path):
-    old_freq_df = pd.read_csv(freq_path)
-    freq_df = (pd
-               .concat([old_freq_df, freq_df], ignore_index=True)
-               .groupby('word')
-               .sum())
-freq_df.to_csv(freq_path, index=True)
-print(f'Now there are {freq_df.frequency.sum()} samples in the database.')
+    with open(freq_path, 'r', encoding='utf-8') as f:
+        old_freq_list = list(csv.reader(f))
+    for word, freq in old_freq_list:
+        new_freq_dict[word] = new_freq_dict.get(word, 0) + int(freq)
+with open(freq_path, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.writer(f)
+    writer.writerows(list(new_freq_dict.items()))
+print(
+    f'Number of samples in the database: {sum(list(new_freq_dict.values()))}')
 print(f'The vocabularies\' frequency has been stored at: {freq_path}.')
 
 
 # save list of vocabularies
 vocab_path = os.path.join(data_dir, 'vocabs_sorted_list.txt')
-vocabs = list(word_dict.keys())
+vocabs = list(freq_dict.keys())
 old_vocabs = []
 if os.path.isfile(vocab_path):
     with open(vocab_path, 'r', encoding='utf-8') as f:
@@ -318,13 +321,13 @@ if os.path.isfile(vocab_path):
 vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
 with open(vocab_path, 'w', encoding='utf-8') as f:
     print(*vocabs, sep='\n', file=f)
-print(f'\nThere are {len(set(word_dict.keys()) - set(vocabs))} new words.')
-print(f'Now there are {len(vocabs)} vocabularies in the database.')
+print(f'\nNumber of new vocabs: {len(set(freq_dict.keys()) - set(vocabs))}')
+print(f'Number of vocabs in the database: {len(vocabs)}')
 print(f'List of them has been stored at: {vocab_path}.')
 
 
 # save error words
-print(f'\nThere are {len(errors)} words that cause error.')
+print(f'\nNumber of words that cause error: {len(errors)}')
 error_path = os.path.join(data_dir, 'errors.csv')
 if os.path.isfile(error_path):
     old_errors = pd.read_csv(error_path)
