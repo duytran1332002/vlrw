@@ -149,7 +149,4 @@ if os.path.isfile(vocab_path):
 vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
 with open(vocab_path, 'w', encoding='utf-8') as f:
     print(*vocabs, sep='\n', file=f)
-print(
-    f'\nNumber of new vocabs: {len(set(top_freq_dict.keys()) - set(vocabs))}')
-print(f'Number of vocabs in the database: {len(vocabs)}')
 print(f'List of them has been stored at: {vocab_path}.')
