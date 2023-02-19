@@ -3,7 +3,7 @@ import pandas as pd
 import pysrt
 import os
 from tqdm import tqdm
-from utils import check_data_dir, get_file_list
+from utils import *
 
 
 def load_args():
@@ -26,9 +26,11 @@ def load_args():
                         default=None,
                         help='Which date to stop')
     parser.add_argument('--n-class',
+                        type=int,
                         default=400,
                         help='Get top n-class')
     parser.add_argument('-t', '--threshold',
+                        type=int,
                         default=20,
                         help='Minimum number of sample per class')
     parser.add_argument('-m', '--mode',
@@ -43,25 +45,40 @@ def load_args():
     return args
 
 
-def is_tagged(word):
-    return word[-2:] == args.tag
-
-
 args = load_args()
+
+data_dir = args.data_dir
+srt_dir = args.srt_dir
+word_freq_path = args.word_freq_path
+start_date = args.start_date
+end_date = args.end_date
+n_class = args.n_class
+threshold = args.threshold
+mode = args.mode
+tag = args.tag
+
+
+# for debugging
+# data_dir = r'D:\Coding\LipReadingProject\test_data'
+# srt_dir = None
+# word_freq_path = None
+# start_date = '20220810'
+# end_date = '20221227'
+# n_class = 400
+# threshold = 20
+# mode = 'override'
+# tag = '_0'
 
 
 # check mode
-assert args.mode in ['override', 'skip'], 'Invalid mode'
+assert mode in ['override', 'skip'], 'Invalid mode'
 
 
 # if user provides a data directory
-if args.data_dir is not None:
+if data_dir is not None:
     dir_names = ['srt_transcripts']
-    srt_dir = check_data_dir(args.data_dir, dir_names)[0]
-    freq_path = os.path.join(args.data_dir, 'word_freq.csv')
-else:
-    srt_dir = args.srt_dir
-    freq_path = args.word_freq_path
+    srt_dir = check_data_dir(data_dir, dir_names)[0]
+    freq_path = os.path.join(data_dir, 'word_freq.csv')
 
 
 # get list of srt paths
@@ -69,8 +86,8 @@ srt_paths = []
 if os.path.isdir(srt_dir):
     # get list of srt files from start to end
     srt_files = get_file_list(files=os.listdir(srt_dir),
-                              start=args.start_date,
-                              end=args.end_date)
+                              start=start_date,
+                              end=end_date)
     srt_paths = [os.path.join(srt_dir, srt_file)
                  for srt_file in srt_files]
 elif os.path.isfile(srt_dir):
@@ -82,34 +99,57 @@ else:
 
 # get dictionary of top n-class words and their number of sample
 if os.path.isfile(freq_path):
-    freq_df = pd.read_csv(freq_path)
-    top_freq_list = sorted(list(zip(freq_df['word'], freq_df['frequency'])),
-                           key=lambda x: x[1])[:args.n_class]
+    freq_list = convert_column_datatype(read_csv_to_list(freq_path),
+                                        column=1,
+                                        datatype=int)
+    top_freq_list = sorted(freq_list, key=lambda x: x[1])[:n_class]
     top_freq_dict = dict(top_freq_list)
 else:
     raise Exception('Invalid word frequency file')
 
 
 n_tagged = 0
+n_untagged = 0
 # add tag to words that have the number of sample below threshold
 for srt_path in tqdm(srt_paths,
                      total=len(srt_paths),
                      desc='srt files',
                      unit=' file',
-                     dynamic_ncols=True,
-                     postfix=f'Number of tag: {n_tagged}'):
+                     dynamic_ncols=True):
     subs = pysrt.open(srt_path)
-    for sub in subs:
+    for sub in tqdm(subs, leave=False):
         word = sub.text
-        if word in top_freq_dict:
-            if top_freq_dict[word] < args.threshold:
-                if not is_tagged(word):
-                    sub.text = word + args.tag
-                n_tagged += 1
-            else:
-                if is_tagged(word) and args.mode == 'override':
-                    sub.text = word[:-2]
+        is_tagged = False
+
+        if word[-2:] == tag:
+            word = word[:-2]
+            is_tagged = True
+
+        if word in top_freq_dict.keys() and top_freq_dict[word] < threshold:
+            if not is_tagged:
+                sub.text = word + tag
+            n_tagged += 1
+        else:
+            if is_tagged and mode == 'override':
+                sub.text = word
+                n_untagged += 1
     subs.save(srt_path)
 
 
-print(f'Number of tagged words: {n_tagged}')
+print(f'\nNumber of tagged words: {n_tagged}')
+print(f'\nNumber of untagged words: {n_untagged}')
+
+# save list of top words
+vocab_path = os.path.join(data_dir, f'{n_class}_vocabs_sorted_list.txt')
+vocabs = list(top_freq_dict.keys())
+old_vocabs = []
+if os.path.isfile(vocab_path):
+    with open(vocab_path, 'r', encoding='utf-8') as f:
+        old_vocabs = f.read().split()
+vocabs = sorted(list(set(vocabs) | set(old_vocabs)))
+with open(vocab_path, 'w', encoding='utf-8') as f:
+    print(*vocabs, sep='\n', file=f)
+print(
+    f'\nNumber of new vocabs: {len(set(top_freq_dict.keys()) - set(vocabs))}')
+print(f'Number of vocabs in the database: {len(vocabs)}')
+print(f'List of them has been stored at: {vocab_path}.')
