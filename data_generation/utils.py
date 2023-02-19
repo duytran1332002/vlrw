@@ -532,7 +532,7 @@ def binary_seach(arr, target):
 
     Returns:
         int
-            index of target value in the array
+            index of target value in  the array
     '''
     low = 0
     high = len(arr) - 1
@@ -607,17 +607,29 @@ def get_file_list(files: list, start=None, end=None):
     '''
     extension = os.path.splitext(files[0])[1]
     # implement binary search to find start srt file
-    if start is not None:
+    if start is not None and start >= files[0][:8]:
         start_idx = binary_seach(files, start + extension)
         if start_idx == -1:
             raise Exception('Invalid start date')
     else:
         start_idx = 0
     # implement binary search to find end srt file
-    if end is not None:
+    if end is not None and end <= files[-1][:8]:
         end_idx = binary_seach(files, end + extension)
         if end_idx == -1:
             raise Exception('Invalid end date')
     else:
         end_idx = len(files) - 1
     return files[start_idx:end_idx+1]
+
+
+def check_data_dir(data_dir, dir_names):
+    '''
+
+    '''
+    dirs = []
+    for dir_name in dir_names:
+        dir = os.path.join(data_dir, dir_name)
+        dirs.append(dir)
+        check_dir(dir)
+    return dirs
