@@ -1,4 +1,6 @@
 import csv
+import datetime
+import glob
 import os
 import soundfile
 import torch
@@ -621,7 +623,15 @@ def get_file_list(files: list, start=None, end=None):
             raise Exception('Invalid end date')
     else:
         end_idx = len(files) - 1
-    return files[start_idx:end_idx+1]
+
+    files = files[start_idx:end_idx+1]
+
+    # check if the date in list is valid
+    for file in files:
+        if not is_valid_date(file[:8]):
+            raise Exception(f'Invalid date or wrong pattern: {file[:8]}')
+
+    return files
 
 
 def check_data_dir(data_dir, dir_names):
@@ -642,7 +652,51 @@ def read_csv_to_list(csv_path):
         return list(reader)
 
 
+def save_list_to_csv(lst, csv_path):
+    with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerows(lst)
+
+
+def read_txt_to_list(txt_path):
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        return f.read().split()
+
+
+def save_list_to_txt(lst, txt_path):
+    with open(txt_path, 'w', encoding='utf-8') as f:
+        print(*lst, sep='\n', file=f)
+
+
 def convert_column_datatype(arr, column, datatype):
     for i in range(len(arr)):
         arr[i][column] = datatype(arr[i][column])
     return arr
+
+
+def remove_leftover(file):
+    # delete leftover files
+    leftover_files = glob.glob(file)
+    for file in leftover_files:
+        os.remove(file)
+
+
+def filter_extension(dir, ext, return_path=False):
+    paths = glob.glob(os.path.join(dir, '*.' + ext))
+    if return_path:
+        return paths
+    return [os.path.basename(path) for path in paths]
+
+
+def is_valid_date(date_str):
+    try:
+        datetime.datetime.strptime(date_str, '%Y%m%d')
+        return True
+    except ValueError:
+        return False
+
+
+def remove_files_in_dir(dir):
+    files = glob.glob(os.path.join(dir, '*'))
+    for file in files:
+        os.remove(file)
