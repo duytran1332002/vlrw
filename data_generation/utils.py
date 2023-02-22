@@ -647,9 +647,11 @@ def check_data_dir(data_dir, dir_names):
 
 
 def read_csv_to_list(csv_path):
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        return list(reader)
+    if os.path.isfile(csv_path):
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            return list(reader)
+    return []
 
 
 def save_list_to_csv(lst, csv_path):
@@ -659,8 +661,10 @@ def save_list_to_csv(lst, csv_path):
 
 
 def read_txt_to_list(txt_path):
-    with open(txt_path, 'r', encoding='utf-8') as f:
-        return f.read().split()
+    if os.path.isfile(txt_path):
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            return f.read().split()
+    return []
 
 
 def save_list_to_txt(lst, txt_path):
@@ -669,8 +673,9 @@ def save_list_to_txt(lst, txt_path):
 
 
 def convert_column_datatype(arr, column, datatype):
-    for i in range(len(arr)):
-        arr[i][column] = datatype(arr[i][column])
+    if arr != []:
+        for i in range(len(arr)):
+            arr[i][column] = datatype(arr[i][column])
     return arr
 
 
@@ -696,7 +701,7 @@ def is_valid_date(date_str):
         return False
 
 
-def remove_files_in_dir(dir):
-    files = glob.glob(os.path.join(dir, '*'))
-    for file in files:
-        os.remove(file)
+def merge_dict(dict1, dict2):
+    for key, value in dict2.items():
+        dict1[key] = dict1.get(key, 0) + value
+    return dict1
