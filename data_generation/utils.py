@@ -13,9 +13,10 @@ from pytube import YouTube, Playlist
 
 g2p = G2p()
 
-phone_dict = ['AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'B', 'CH', 'D', 'DH', 'EH', 'ER', 'EY', 'F', 'G', 'HH', 'IH', 'IY',
-              'JH', 'K', 'L', 'M', 'N', 'NG', 'OW', 'OY', 'P', 'R', 'S', 'SH', 'T', 'TH', 'UH', 'UW', 'V', 'W', 'Y',
-              'Z', 'ZH', ' ']
+phone_dict = ['AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'B', 'CH', 'D', 'DH', 'EH',
+              'ER', 'EY', 'F', 'G', 'HH', 'IH', 'IY', 'JH', 'K', 'L', 'M',
+              'N', 'NG', 'OW', 'OY', 'P', 'R', 'S', 'SH', 'T', 'TH', 'UH',
+              'UW', 'V', 'W', 'Y', 'Z', 'ZH', ' ']
 phone2int = {phone_dict[i]: i for i in range(len(phone_dict))}
 
 
@@ -32,15 +33,15 @@ def worker_init_fn(worker_id):
 
 
 def find_separated_vocal(fileid):
-
     pass
 
 
 def load(path, sr=22050, mono=True, offset=0., duration=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        y, curr_sr = librosa.load(
-            path, sr=sr, mono=mono, res_type='kaiser_fast', offset=offset, duration=duration)
+        y, curr_sr = librosa.load(path, sr=sr, mono=mono,
+                                  res_type='kaiser_fast', offset=offset,
+                                  duration=duration)
 
     if len(y.shape) == 1:
         y = y[np.newaxis, :]  # (channel, sample)
@@ -73,7 +74,7 @@ def load_lyrics(lyrics_file):
         word = words_lines[i]
         try:
             assert (word[0] in ascii_lowercase)
-        except:
+        except Exception:
             # print(word)
             pass
         new_word = "".join([c for c in word.lower() if c in d.keys()])
@@ -517,9 +518,9 @@ def check_youtube_url(url):
         try:
             playlist = Playlist(url)
             return [YouTube(video_url) for video_url in playlist.video_urls]
-        except:
+        except Exception:
             return [YouTube(url)]
-    except:
+    except Exception:
         return None
 
 

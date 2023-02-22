@@ -5,7 +5,6 @@ import os
 import shutil
 import pandas as pd
 import pysrt
-import glob
 from math import floor
 from random import shuffle
 from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -205,7 +204,6 @@ class LabelProcessor:
                                          unit=' video',
                                          dynamic_ncols=True):
             temp_freq_dict = dict()
-            temp_errors = []
 
             # Load the video file
             video = VideoFileClip(video_path)
@@ -289,7 +287,7 @@ class LabelProcessor:
                     # fix errors
                     freq_dict, still_error = self.fix_error(freq_dict,
                                                             date, video,
-                                                            e, start, end,
+                                                            start, end,
                                                             word, sample_path,
                                                             annot_path)
                     if not still_error:
@@ -297,7 +295,7 @@ class LabelProcessor:
                     if len(self.error_dict) > 0 and id not in self.error_dict.keys():
                         start = self.change_boundary(start, 1)
                         end = self.change_boundary(end, -1)
-                        temp_errors.append([id, start, end, word, e])
+                        self.error_dict[id] = [start, end, word, e]
                         self.n_new_error += 1
                     self.total_errors += 1
         video.close()
@@ -475,7 +473,7 @@ class LabelProcessor:
             print(f'Duration: {duration} seconds', file=f)
 
     def fix_error(self, freq_dict, date, video,
-                  error, start, end, word,
+                  start, end, word,
                   sample_path, annot_path):
         label_dir = os.path.join(self.word_video_dir, word)
         n_sample = os.listdir(label_dir)

@@ -1,4 +1,5 @@
 import argparse
+from utils import check_data_dir
 from label_processor import LabelProcessor
 
 
