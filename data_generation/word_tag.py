@@ -80,5 +80,6 @@ if __name__ == '__main__':
     label_processor = LabelProcessor(data_dir=data_dir,
                                      srt_dir=srt_dir,
                                      start_date=start_date,
-                                     end_date=end_date)
-    label_processor.tag(n_class, threshold, mode, tag)
+                                     end_date=end_date,
+                                     n_class=400)
+    label_processor.tag(threshold, mode, tag)

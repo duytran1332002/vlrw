@@ -482,4 +482,4 @@ def convert_grapheme_to_phoneme(text,
         phon += ortho + output_ortho
     phon += compound
     # print(compound)
-    return phon
+    return phon.strip()

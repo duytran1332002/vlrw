@@ -1,4 +1,5 @@
 import argparse
+
 from label_processor import LabelProcessor
 from utils import check_data_dir, check_dir
 
@@ -28,9 +29,14 @@ def load_args():
                         default='override',
                         help='How to deal with existing files \
                                 override, skip or append')
-    parser.add_argument('--fix-error',
-                        default=False,
-                        help='Fix error word')
+    parser.add_argument('--train-size',
+                        type=float,
+                        default=0.7,
+                        help='The proportion of training set')
+    parser.add_argument('--test-size',
+                        type=float,
+                        default=0.1,
+                        help='The proportion of test set')
 
     args = parser.parse_args()
 
@@ -47,15 +53,16 @@ if __name__ == '__main__':
     start_date = args.start_date
     end_date = args.end_date
     mode = args.mode
+    train_size = args.train_size
+    test_size = args.test_size
 
     # for debugging
     # data_dir = r'D:\Coding\LipReadingProject\test_data'
-    # video_dir = None
-    # srt_dir = None
-    # save_dir = None
-    # start_date = '20220701'
-    # end_date = '20220809'
-    # mode = 'override'
+    # start_date = '20220702'
+    # end_date = '20220702'
+    # mode = 'skip'
+    # train_size = 0.7
+    # test_size = 0.2
 
     # check mode
     assert mode in ['override', 'skip'], 'Invalid mode'
@@ -71,6 +78,12 @@ if __name__ == '__main__':
     check_dir(word_video_dir)
 
     # extract video
-    label_processor = LabelProcessor(data_dir, video_dir, srt_dir, word_video_dir,
-                                     start_date, end_date)
-    label_processor.process(mode)
+    label_processor = LabelProcessor(data_dir=data_dir,
+                                     video_dir=video_dir,
+                                     srt_dir=srt_dir,
+                                     word_video_dir=word_video_dir,
+                                     start_date=start_date,
+                                     end_date=end_date)
+    label_processor.generate_video(mode=mode)
+    label_processor.split_train_val_test(train_size=train_size,
+                                         test_size=test_size)
