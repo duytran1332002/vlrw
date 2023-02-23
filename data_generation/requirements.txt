@@ -11,11 +11,11 @@ torchaudio
 tensorboard
 sortedcontainers
 youtube_dl
-g2p_en
+g2p_en==2.1.0
 transformers==4.9.2 
 pyctcdecode==v0.1.0
 kenlm
-pytube
-pysrt
+pytube==12.2.1
+pysrt==1.1.2
 moviepy == 1.0.3
-wordcloud
+wordcloud==1.8.2.2
