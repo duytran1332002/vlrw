@@ -3,13 +3,14 @@ import datetime
 import io
 import os
 import shutil
-import pandas as pd
-import pysrt
 from math import floor
 from random import shuffle
+
+import pandas as pd
+import pysrt
+import utils
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
-from utils import *
 from vPhon import convert_grapheme_to_phoneme
 
 
@@ -28,15 +29,15 @@ class LabelProcessor:
         # get vocabs and their samples
         self.freq_path = os.path.join(self.data_dir, 'freq.csv')
         self.vocab_path = os.path.join(self.data_dir, 'vocabs_sorted_list.txt')
-        freq_list = read_csv_to_list(self.freq_path)
+        freq_list = utils.read_csv_to_list(self.freq_path)
         # check n_class
         if 0 < self.n_class < len(freq_list):
             # sort freq_list and get top n_class
             freq_list = sorted(freq_list, key=lambda x: x[1], reverse=True)
             freq_list = freq_list[:self.n_class]
-        self.freq_dict = dict(convert_column_datatype(freq_list,
-                                                      column=1,
-                                                      datatype=int))
+        self.freq_dict = dict(utils.convert_column_datatype(freq_list,
+                                                            column=1,
+                                                            datatype=int))
         self.total_vocabs = 0
         self.n_new_vocab = 0
         self.total_samples = 0
@@ -49,7 +50,7 @@ class LabelProcessor:
             self.grapheme_dict[phon] = self.grapheme_dict.get(phon, vocab)
 
         self.error_path = os.path.join(self.data_dir, 'errors.csv')
-        errors = read_csv_to_list(self.error_path)
+        errors = utils.read_csv_to_list(self.error_path)
         self.error_dict = {id: [start, end, word, e]
                            for id, start, end, word, e in errors}
         self.total_errors = 0
@@ -61,11 +62,11 @@ class LabelProcessor:
     def check_missing_data(self):
         video_dates = [video[:8] for video in self.videos]
         srt_dates = [srt_file[:8] for srt_file in self.srt_files]
-        missing_dates = sorted(find_complement(srt_dates, video_dates))
+        missing_dates = sorted(utils.find_complement(srt_dates, video_dates))
         missing_files = []
         if len(missing_dates) > 0:
             for date in missing_dates:
-                if binary_seach(self.srt_files, f'{date}.srt') == -1:
+                if utils.binary_seach(self.srt_files, f'{date}.srt') == -1:
                     missing_files.append(f'{date}.srt')
                     self.video_paths.remove(os.path.join(self.video_dir,
                                                          f'{date}.mp4'))
@@ -83,12 +84,10 @@ class LabelProcessor:
                         time_change: float) -> datetime.time:
         '''
         Change the boundary of a time object
-
         Parameters:
             time_boundary: datetime.time
             time_change: float
                 the change of time boundary in seconds
-
         returns:
             datetime.time
         '''
@@ -103,13 +102,11 @@ class LabelProcessor:
     def read_srt_to_df(self, srt_path):
         '''
         Read srt file to pandas.dataframe
-
         Parameters:
             srt_path: str
                 the path of srt file
             csv_path: str
                 the path of csv file
-
         Returns:
             pd.DataFrame
                 the dataframe of words
@@ -136,7 +133,6 @@ class LabelProcessor:
     def cut_video(self, video, start, end, file_path):
         '''
         Cut vide from start to end and save the cut
-
         Parameters:
             video: moviepy.video.io.VideoFileClip.VideoFileClip
                 the video to be cut
@@ -146,22 +142,17 @@ class LabelProcessor:
                 the end time of the cut
             file_path: str
                 the path of the cut video
-
-        Returns:
-            moviepy.video.io.VideoFileClip.VideoFileClip
-                the cut video
         '''
         with contextlib.redirect_stdout(io.StringIO()):
             piece = video.subclip(start, end)
             piece.write_videofile(file_path, fps=video.fps)
-            return piece
 
     def get_file_paths(self, dir, ext):
         if os.path.isdir(dir):
             # get list of file paths from start to end
-            files = get_file_list(files=filter_extension(dir, ext),
-                                  start=self.start_date,
-                                  end=self.end_date)
+            files = utils.get_file_list(files=utils.filter_extension(dir, ext),
+                                        start=self.start_date,
+                                        end=self.end_date)
             return files, [os.path.join(dir, file) for file in files]
         raise Exception(f'Invalid {ext} files')
 
@@ -176,14 +167,11 @@ class LabelProcessor:
     def is_tagged(self, word):
         return word[-2:].startswith('_')
 
-    def cut_and_generate(self, date, video,
-                         start, end, sample_path, annot_path):
-        # cut video
-        sample = self.cut_video(video, start, end, sample_path)
-        # generate annotation for sample
-        self.generate_annotation(date=date, start=start,
-                                 sample=sample,
-                                 annot_path=annot_path)
+    def is_splitted(self, label_dir):
+        train_dir = os.path.join(label_dir, 'train')
+        if os.path.exists(train_dir):
+            return True
+        return False
 
     def generate_video(self, mode):
         # get videos and srt files
@@ -198,6 +186,7 @@ class LabelProcessor:
         # get copy of self.freq_dict but all values = 0
         freq_dict = {key: 0 for key in self.freq_dict.keys()}
 
+        # extract word-level video
         for video_path, srt_path in tqdm(zip(self.video_paths, self.srt_paths),
                                          total=len(self.video_paths),
                                          desc='Videos',
@@ -212,28 +201,13 @@ class LabelProcessor:
             # read srt to dataframe
             df = self.read_srt_to_df(srt_path)
 
-            # remove all file
-            # TODO: fix this
-            # if mode == 'override':
-            #     for label_dir in os.listdir(self.word_video_dir):
-            #         word = os.path.basename(label_dir)
-            #         file_paths = glob.glob(os.path.join(label_dir, f'{date}*.mp4'))
-            #         for file_path in file_paths:
-            #             os.remove(file_path)
-            #             self.freq_dict[word] -= 1
-            #         if len(os.listdir(label_dir)) == 0:
-            #             self.vocabs.remove(word)
-
-            # extract word-level video
             for _, row in tqdm(df.iterrows(),
                                total=len(df),
                                desc='Words',
                                unit=' word',
                                leave=False,
                                dynamic_ncols=True):
-                self.total_samples += 1
-
-                # get start, end and word
+                # cut the video into smaller pieces
                 start = row.start
                 end = row.end
                 word = row.word
@@ -254,46 +228,42 @@ class LabelProcessor:
                         continue
                     self.n_new_vocab += 1
 
+                # update total sample and vocabs
+                temp_freq_dict[word] = temp_freq_dict.get(word, 0) + 1
+                self.total_samples += 1
+
                 # check word folder
                 label_dir = os.path.join(self.word_video_dir, word)
-                check_dir(label_dir)
+                utils.check_dir(label_dir)
+
+                # if the label have train, val, test, merge them
+                if self.is_splitted(label_dir):
+                    self.merge_train_val_test(label_dir)
 
                 # number of sample of this label
                 n_sample = len(os.listdir(label_dir))
 
                 # name the video
-                if temp_freq_dict.get(word, 0) == 0:
-                    temp_freq_dict[word] = 0
-                temp_freq_dict[word] += 1
                 id = f'{date}{str(temp_freq_dict[word]).zfill(5)}'
                 sample_name = id + '.mp4'
                 if sample_name in os.listdir(label_dir) and mode == 'skip':
                     continue
                 sample_path = os.path.join(label_dir, sample_name)
-                annot_path = sample_path.replace('mp4', 'txt')
 
+                # cut video
                 try:
-                    # cut video and generate annotation
-                    self.cut_and_generate(date, video,
-                                          start, end, sample_path, annot_path)
+                    self.cut_video(video, start, end, sample_path)
                     self.n_new_sample += 1
-                    # update freq_dict if there is a change
                     if n_sample != len(os.listdir(label_dir)):
                         freq_dict[word] = freq_dict.get(word, 0) + 1
                 except KeyboardInterrupt:
                     print('\n')
                     os._exit(0)
                 except Exception as e:
-                    # fix errors
-                    freq_dict, still_error = self.fix_error(freq_dict,
-                                                            date, video,
-                                                            start, end,
-                                                            word, sample_path,
-                                                            annot_path)
-                    if not still_error:
-                        continue
-                    if len(self.error_dict) > 0 and id not in self.error_dict.keys():
+                    if self.error_dict.get(id, None) is None:
+                        start = utils.convert_str_to_time(start)
                         start = self.change_boundary(start, 1)
+                        end = utils.convert_str_to_time(end)
                         end = self.change_boundary(end, -1)
                         self.error_dict[id] = [start, end, word, e]
                         self.n_new_error += 1
@@ -301,22 +271,24 @@ class LabelProcessor:
         video.close()
 
         # clean leftover
-        remove_leftover('*.mp3')
+        utils.remove_leftover('*.mp3')
 
         # update self.freq_dict
-        self.freq_dict = merge_dict(self.freq_dict, freq_dict)
+        self.freq_dict = utils.merge_dict(self.freq_dict, freq_dict)
 
         # update vocabs
+        # TODO: wrong total vocab when skip
         for _, value in freq_dict.items():
             self.total_vocabs += 1 if value > 0 else 0
 
         # save info
-        save_list_to_csv(list(self.freq_dict.items()), self.freq_path)
-        save_list_to_txt(sorted(list(self.freq_dict.keys()), reverse=True),
-                         self.vocab_path)
+        utils.save_list_to_csv(list(self.freq_dict.items()), self.freq_path)
+        utils.save_list_to_txt(sorted(list(self.freq_dict.keys()),
+                                      reverse=True),
+                               self.vocab_path)
         errors = [[id, start, end, word, e]
                   for id, [start, end, word, e] in self.error_dict.items()]
-        save_list_to_csv(errors, self.error_path)
+        utils.save_list_to_csv(errors, self.error_path)
 
         # print info
         self.print_process_info()
@@ -368,10 +340,7 @@ class LabelProcessor:
 
         # get list of label directories
         label_dirs = [os.path.join(self.word_video_dir, vocab)
-                      for vocab in self.freq_dict.key()]
-
-        # merged the splitted before split again
-        self.merge_train_val_test(label_dirs)
+                      for vocab in self.freq_dict.keys()]
 
         for label_dir in tqdm(label_dirs,
                               desc='Labels',
@@ -379,7 +348,11 @@ class LabelProcessor:
                               leave=True,
                               unit=' label',
                               dynamic_ncols=True):
-            samples = os.listdir(label_dir)
+            # merged the splitted before split again
+            if self.is_splitted(label_dir):
+                self.merge_train_val_test(label_dir)
+
+            samples = utils.filter_extension(label_dir, 'mp4')
             n_sample = len(samples)
 
             train_idx = floor(train_size * n_sample)
@@ -394,11 +367,11 @@ class LabelProcessor:
 
             # create train, val and test folders
             train_dir = os.path.join(label_dir, 'train')
-            check_dir(train_dir)
+            utils.check_dir(train_dir)
             val_dir = os.path.join(label_dir, 'val')
-            check_dir(val_dir)
+            utils.check_dir(val_dir)
             test_dir = os.path.join(label_dir, 'test')
-            check_dir(test_dir)
+            utils.check_dir(test_dir)
 
             # move samples
             for sample in train_set:
@@ -426,72 +399,46 @@ class LabelProcessor:
         # print database info
         self.print_database_info()
 
-    def merge_train_val_test(self, label_dirs):
-        for label_dir in label_dirs:
-            train_dir = os.path.join(label_dir, 'train')
-            val_dir = os.path.join(label_dir, 'val')
-            test_dir = os.path.join(label_dir, 'test')
+    def merge_train_val_test(self, label_dir):
+        train_dir = os.path.join(label_dir, 'train')
+        val_dir = os.path.join(label_dir, 'val')
+        test_dir = os.path.join(label_dir, 'test')
 
-            # if one of three folders not exist, pass
-            if not os.path.exists(train_dir):
-                continue
+        # start moving samples out
+        for sample in utils.filter_extension(train_dir, 'mp4'):
+            sample_path = os.path.join(train_dir, sample)
+            annot_path = os.path.join(train_dir, sample[:-4] + '.txt')
+            shutil.move(sample_path, label_dir)
+            shutil.move(annot_path, label_dir)
+        os.rmdir(train_dir)
+        for sample in utils.filter_extension(val_dir, 'mp4'):
+            sample_path = os.path.join(val_dir, sample)
+            annot_path = os.path.join(val_dir, sample[:-4] + '.txt')
+            shutil.move(sample_path, label_dir)
+            shutil.move(annot_path, label_dir)
+        os.rmdir(val_dir)
+        for sample in utils.filter_extension(test_dir, 'mp4'):
+            sample_path = os.path.join(test_dir, sample)
+            annot_path = os.path.join(test_dir, sample[:-4] + '.txt')
+            shutil.move(sample_path, label_dir)
+            shutil.move(annot_path, label_dir)
+        os.rmdir(test_dir)
 
-            # start moving samples out
-            for sample in os.listdir(train_dir):
-                sample_path = os.path.join(train_dir, sample)
-                annot_path = os.path.join(train_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, label_dir)
-                shutil.move(annot_path, label_dir)
-            os.rmdir(train_dir)
-            for sample in os.listdir(val_dir):
-                sample_path = os.path.join(val_dir, sample)
-                annot_path = os.path.join(val_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, label_dir)
-                shutil.move(annot_path, label_dir)
-            os.rmdir(val_dir)
-            for sample in os.listdir(test_dir):
-                sample_path = os.path.join(test_dir, sample)
-                annot_path = os.path.join(test_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, label_dir)
-                shutil.move(annot_path, label_dir)
-            os.rmdir(test_dir)
+        # print(f'Label: {os.path.basename(label_dir)} -', end=' ')
+        # print(f'sample: {len(os.listdir(label_dir))}')
 
-            # print(f'Label: {os.path.basename(label_dir)} -', end=' ')
-            # print(f'sample: {len(os.listdir(label_dir))}')
-
-    def generate_annotation(self, date, start, sample, annot_path):
-        duration = sample.duration
-        sample.close()
+    def generate_annotation(self, start, duration, sample_path):
+        date = os.path.basename(sample_path)[:8]
         year = date[:4]
         month = date[4:6]
         day = date[6:8]
+        annot_path = sample_path[:-4] + '.txt'
         with open(annot_path, 'w') as f:
             print('Disk reference: 6221443953311207281', file=f)
             print('Channel: VTV Daily Weather Forecast Livestream', file=f)
             print(f'Program start: {year}-{month}-{day} 19:00:00 +7', file=f)
             print(f'Clip start: {start} seconds', file=f)
             print(f'Duration: {duration} seconds', file=f)
-
-    def fix_error(self, freq_dict, date, video,
-                  start, end, word,
-                  sample_path, annot_path):
-        label_dir = os.path.join(self.word_video_dir, word)
-        n_sample = os.listdir(label_dir)
-        still_error = False
-        try:
-            # fix error
-            start = self.change_boundary(start, -1)
-            end = self.change_boundary(end, 1)
-            # re-try processing
-            self.cut_and_generate(date, video, start, end,
-                                  sample_path, annot_path)
-            self.n_new_sample += 1
-            # update freq_dict if there is a change
-            if n_sample != len(os.listdir(label_dir)):
-                freq_dict[word] = freq_dict.get(word, 0) + 1
-        except Exception:
-            still_error = True
-        return freq_dict, still_error
 
     def print_process_info(self):
         print('\nIn this run,')
