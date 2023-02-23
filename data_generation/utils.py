@@ -2,14 +2,15 @@ import csv
 import datetime
 import glob
 import os
-import soundfile
-import torch
-import numpy as np
-import librosa
 import string
 import warnings
+
+import librosa
+import numpy as np
+import soundfile
+import torch
 from g2p_en import G2p
-from pytube import YouTube, Playlist
+from pytube import Playlist, YouTube
 
 g2p = G2p()
 
@@ -706,3 +707,7 @@ def merge_dict(dict1, dict2):
     for key, value in dict2.items():
         dict1[key] = dict1.get(key, 0) + value
     return dict1
+
+
+def convert_str_to_time(string):
+    return datetime.datetime.strptime(string, '%H:%M:%S.%f').time()
