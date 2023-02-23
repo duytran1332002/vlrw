@@ -58,9 +58,9 @@ if __name__ == '__main__':
 
     # for debugging
     # data_dir = r'D:\Coding\LipReadingProject\test_data'
-    # start_date = '20220702'
-    # end_date = '20220702'
-    # mode = 'skip'
+    # start_date = '20220701'
+    # end_date = '20220701'
+    # mode = 'override'
     # train_size = 0.7
     # test_size = 0.2
 
@@ -85,5 +85,5 @@ if __name__ == '__main__':
                                      start_date=start_date,
                                      end_date=end_date)
     label_processor.generate_video(mode=mode)
-    label_processor.split_train_val_test(train_size=train_size,
-                                         test_size=test_size)
+    # label_processor.split_train_val_test(train_size=train_size,
+    #                                      test_size=test_size)
