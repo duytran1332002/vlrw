@@ -172,3 +172,8 @@ def write_csv(sampling_rate, pred_file, word_align, words):
             word_time = word_align[j]
             f.write("{},{},{}\n".format(
                 word_time[0] * resolution, word_time[1] * resolution, words[j]))
+
+
+# TODO: complete this code
+def write_srt():
+    pass
