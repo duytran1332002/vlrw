@@ -689,6 +689,20 @@ def remove_leftover(file):
 
 
 def filter_extension(dir, ext, return_path=False):
+    """_summary_
+
+    Paramters:
+        dir: (_type_) 
+            _description_
+        ext: (_type_) 
+            _description_
+        return_path: (bool, optional). Defaults: False.
+            _description_
+
+    Returns:
+        _type_: 
+            _description_
+    """
     paths = glob.glob(os.path.join(dir, '*.' + ext))
     if return_path:
         return paths
