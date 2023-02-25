@@ -3,15 +3,14 @@ import datetime
 import io
 import os
 import shutil
-from math import floor
-from random import shuffle
-
 import pandas as pd
 import pysrt
 import utils
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
 from vPhon import convert_grapheme_to_phoneme
+from math import floor
+from random import shuffle
 
 
 class LabelProcessor:
@@ -51,8 +50,8 @@ class LabelProcessor:
 
         self.error_path = os.path.join(self.data_dir, 'errors.csv')
         errors = utils.read_csv_to_list(self.error_path)
-        self.error_dict = {id: [start, end, word, e]
-                           for id, start, end, word, e in errors}
+        self.error_dict = {error_id: [start, end, e]
+                           for error_id, start, end, e in errors}
         self.total_errors = 0
         self.n_new_error = 0
 
@@ -60,6 +59,8 @@ class LabelProcessor:
         self.n_untagged = 0
 
     def check_missing_data(self):
+        """_summary_
+        """
         video_dates = [video[:8] for video in self.videos]
         srt_dates = [srt_file[:8] for srt_file in self.srt_files]
         missing_dates = sorted(utils.find_complement(srt_dates, video_dates))
@@ -100,8 +101,8 @@ class LabelProcessor:
         return dt.time()
 
     def read_srt_to_df(self, srt_path):
-        '''
-        Read srt file to pandas.dataframe
+        '''Read srt file to pandas.dataframe
+
         Parameters:
             srt_path: str
                 the path of srt file
@@ -131,8 +132,8 @@ class LabelProcessor:
         return words
 
     def cut_video(self, video, start, end, file_path):
-        '''
-        Cut vide from start to end and save the cut
+        '''Cut vide from start to end and save the cut
+
         Parameters:
             video: moviepy.video.io.VideoFileClip.VideoFileClip
                 the video to be cut
@@ -146,8 +147,21 @@ class LabelProcessor:
         with contextlib.redirect_stdout(io.StringIO()):
             piece = video.subclip(start, end)
             piece.write_videofile(file_path, fps=video.fps)
+            self.generate_annotation(start, piece.duration, file_path)
 
     def get_file_paths(self, dir, ext):
+        """_summary_
+
+        Parameters:
+            dir (_type_): _description_
+            ext (_type_): _description_
+
+        Raises:
+            Exception: _description_
+
+        Returns:
+            _type_: _description_
+        """
         if os.path.isdir(dir):
             # get list of file paths from start to end
             files = utils.get_file_list(files=utils.filter_extension(dir, ext),
@@ -157,23 +171,82 @@ class LabelProcessor:
         raise Exception(f'Invalid {ext} files')
 
     def merge_label(self, word):
-        # merge words that have similar sound
+        """_summary_
+
+        Paramters:
+            word: (_type_)
+                _description_
+
+        Returns:
+            str:
+                _description_
+        """
         phon = convert_grapheme_to_phoneme(word)
+
+        # merge all 'hỏi' and 'ngã'  together
+        if phon[-2:] in ['C2', 'C1']:
+            for phone, _ in self.grapheme_dict.items():
+                if phone[:-2] == phon[:-2] and phone[-2:] in ['C2', 'C1']:
+                    return self.grapheme_dict[phone]
+
         if self.grapheme_dict.get(phon, None) is None:
             self.grapheme_dict[phon] = word
             return word
+
         return self.grapheme_dict[phon]
 
     def is_tagged(self, word):
+        """_summary_
+
+        Paramters:
+            word: (_type_)
+                _description_
+
+        Returns:
+            _type_:
+                _description_
+        """
         return word[-2:].startswith('_')
 
     def is_splitted(self, label_dir):
+        """_summary_
+
+        Paramters:
+            label_dir: (_type_)
+                _description_
+
+        Returns:
+            _type_:
+                _description_
+        """
         train_dir = os.path.join(label_dir, 'train')
         if os.path.exists(train_dir):
             return True
         return False
 
-    def generate_video(self, mode):
+    def is_annotated(self, sample_path):
+        """_summary_
+
+        Paramters:
+            sample_path: (_type_)
+                _description_
+
+        Returns:
+            _type_:
+                _description_
+        """
+        annot_path = sample_path.replace('mp4', 'txt')
+        return os.path.isfile(annot_path)
+
+    def generate_video(self, mode: str = 'override', tag_only: bool = False):
+        """_summary_
+
+        Paramters:
+            mode: (_type_)
+                _description_
+            tag_only: (bool, optional). Defaults: False.
+                _description_
+        """
         # get videos and srt files
         self.videos, self.video_paths = self.get_file_paths(self.video_dir,
                                                             'mp4')
@@ -185,6 +258,9 @@ class LabelProcessor:
 
         # get copy of self.freq_dict but all values = 0
         freq_dict = {key: 0 for key in self.freq_dict.keys()}
+        # freq_dict = dict()
+
+        sample_set = set()
 
         # extract word-level video
         for video_path, srt_path in tqdm(zip(self.video_paths, self.srt_paths),
@@ -215,22 +291,25 @@ class LabelProcessor:
                 # remove tag
                 if self.is_tagged(word):
                     word = word[:-2]
+                else:
+                    # only process tagged word
+                    if tag_only:
+                        continue
 
                 # merge label
                 if word == 'con':  # avoid error when uploading on cloud
                     word = 'kon'
-                # TODO: fix 'bão' vs 'bảo'
                 word = self.merge_label(word)
 
                 # only process top n_class
                 if word not in self.freq_dict.keys():
                     if self.n_class != 0:
                         continue
-                    self.n_new_vocab += 1
 
                 # update total sample and vocabs
                 temp_freq_dict[word] = temp_freq_dict.get(word, 0) + 1
                 self.total_samples += 1
+                sample_set.add(word)
 
                 # check word folder
                 label_dir = os.path.join(self.word_video_dir, word)
@@ -240,62 +319,86 @@ class LabelProcessor:
                 if self.is_splitted(label_dir):
                     self.merge_train_val_test(label_dir)
 
-                # number of sample of this label
-                n_sample = len(os.listdir(label_dir))
+                # get sample list in this label directory
+                sample_names = utils.filter_extension(label_dir, 'mp4')
+                n_sample = len(sample_names)
 
                 # name the video
                 id = f'{date}{str(temp_freq_dict[word]).zfill(5)}'
                 sample_name = id + '.mp4'
-                if sample_name in os.listdir(label_dir) and mode == 'skip':
-                    continue
                 sample_path = os.path.join(label_dir, sample_name)
+                if sample_name in sample_names and mode == 'skip':
+                    if not self.is_annotated(sample_path):
+                        piece = VideoFileClip(sample_path)
+                        duration = piece.duration
+                        piece.close()
+                        self.generate_annotation(start, duration, sample_path)
+                    continue
 
                 # cut video
                 try:
                     self.cut_video(video, start, end, sample_path)
                     self.n_new_sample += 1
-                    if n_sample != len(os.listdir(label_dir)):
+                    error_id = id + '_' + word
+                    if self.error_dict.get(error_id, None) is not None:
+                        del self.error_dict[error_id]
+                    new_sample_names = utils.filter_extension(label_dir, 'mp4')
+                    if n_sample != len(new_sample_names):
                         freq_dict[word] = freq_dict.get(word, 0) + 1
                 except KeyboardInterrupt:
                     print('\n')
                     os._exit(0)
                 except Exception as e:
-                    if self.error_dict.get(id, None) is None:
+                    error_id = id + '_' + word
+                    if self.error_dict.get(error_id, None) is None:
                         start = utils.convert_str_to_time(start)
-                        start = self.change_boundary(start, 1)
+                        start = self.change_boundary(start, 0.01)
                         end = utils.convert_str_to_time(end)
-                        end = self.change_boundary(end, -1)
-                        self.error_dict[id] = [start, end, word, e]
+                        end = self.change_boundary(end, -0.01)
+                        self.error_dict[error_id] = [start, end, e]
                         self.n_new_error += 1
                     self.total_errors += 1
         video.close()
 
         # clean leftover
-        utils.remove_leftover('*.mp3')
+        for file in utils.filter_extension('', 'mp3'):
+            os.remove(file)
 
         # update self.freq_dict
         self.freq_dict = utils.merge_dict(self.freq_dict, freq_dict)
 
         # update vocabs
-        # TODO: wrong total vocab when skip
-        for _, value in freq_dict.items():
-            self.total_vocabs += 1 if value > 0 else 0
+        self.n_new_vocab = len(utils.find_complement(sample_set,
+                                                     self.freq_dict.keys(),
+                                                     'a'))
+        self.total_vocabs = len(list(sample_set))
 
         # save info
         utils.save_list_to_csv(list(self.freq_dict.items()), self.freq_path)
         utils.save_list_to_txt(sorted(list(self.freq_dict.keys()),
                                       reverse=True),
                                self.vocab_path)
-        errors = [[id, start, end, word, e]
-                  for id, [start, end, word, e] in self.error_dict.items()]
+        errors = [[error_id, start, end, e]
+                  for error_id, [start, end, e] in self.error_dict.items()]
         utils.save_list_to_csv(errors, self.error_path)
 
         # print info
         self.print_process_info()
         self.print_database_info()
 
-    def tag(self, threshold, mode, tag):
-        # TODO: remove code that do with n_class
+    def tag(self, threshold: int = 0, mode: str = 'override', tag: str = '_0'):
+        """_summary_
+
+        Paramters:
+            threshold: int
+                _description_
+            mode: str
+                _description_
+            tag: str
+                _description_
+        """
+        self.srt_files, self.srt_paths = self.get_file_paths(self.srt_dir,
+                                                             'srt')
         for srt_path in tqdm(self.srt_paths,
                              total=len(self.srt_paths),
                              desc='srt files',
@@ -333,9 +436,16 @@ class LabelProcessor:
         # print tag info
         self.print_tag_info()
         self.print_process_info()
-        self.print_database_info()
 
     def split_train_val_test(self, train_size, test_size):
+        """_summary_
+
+        Paramters:
+            train_size:
+                _description_
+            test_size: (_type_)
+                _description_
+        """
         val_size = 1 - (train_size + test_size)
 
         # get list of label directories
@@ -400,6 +510,12 @@ class LabelProcessor:
         self.print_database_info()
 
     def merge_train_val_test(self, label_dir):
+        """_summary_
+
+        Paramters:
+            label_dir: (_type_)
+                _description_
+        """
         train_dir = os.path.join(label_dir, 'train')
         val_dir = os.path.join(label_dir, 'val')
         test_dir = os.path.join(label_dir, 'test')
@@ -428,6 +544,16 @@ class LabelProcessor:
         # print(f'sample: {len(os.listdir(label_dir))}')
 
     def generate_annotation(self, start, duration, sample_path):
+        """_summary_
+
+        Paramters:
+            start: (_type_)
+                _description_
+            duration: (_type_)
+                _description_
+            sample_path: (_type_)
+                _description_
+        """
         date = os.path.basename(sample_path)[:8]
         year = date[:4]
         month = date[4:6]
@@ -441,6 +567,8 @@ class LabelProcessor:
             print(f'Duration: {duration} seconds', file=f)
 
     def print_process_info(self):
+        """_summary_
+        """
         print('\nIn this run,')
         print(f'    Total samples: {self.total_samples}', end='')
         print(f' - New samples: {self.n_new_sample}')
@@ -450,6 +578,8 @@ class LabelProcessor:
         print(f' - New errors: {self.n_new_error}')
 
     def print_database_info(self):
+        """_summary_
+        """
         print('\nIn database,')
         print(f'    Total samples: {sum(list(self.freq_dict.values()))}')
         print(f'        at: {self.freq_path}')
@@ -459,6 +589,8 @@ class LabelProcessor:
         print(f'        at: {self.error_path}')
 
     def print_tag_info(self):
+        """_summary_
+        """
         print('\nIn this run,')
         print(f'    Total tags: {self.total_samples}', end='')
         print(f' - New tags: {self.n_new_sample}')
