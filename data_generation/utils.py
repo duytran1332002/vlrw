@@ -4,13 +4,13 @@ import glob
 import os
 import string
 import warnings
-
 import librosa
 import numpy as np
 import soundfile
 import torch
 from g2p_en import G2p
 from pytube import Playlist, YouTube
+
 
 g2p = G2p()
 
@@ -611,6 +611,7 @@ def get_file_list(files: list, start=None, end=None):
             list of files from start to end
     '''
     extension = os.path.splitext(files[0])[1]
+
     # implement binary search to find start srt file
     if start is not None and start >= files[0][:8]:
         start_idx = binary_seach(files, start + extension)
@@ -618,6 +619,7 @@ def get_file_list(files: list, start=None, end=None):
             raise Exception('Invalid start date')
     else:
         start_idx = 0
+
     # implement binary search to find end srt file
     if end is not None and end <= files[-1][:8]:
         end_idx = binary_seach(files, end + extension)

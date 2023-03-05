@@ -191,7 +191,7 @@ class SpeechToText:
 
     def save_result_to_file(self, audio_path: str,
                             transcript_path: str,
-                            csv_transcript_path: str) -> None:
+                            csv_path: str) -> None:
         '''
             Save transcript as text file and aligned transcript as csv file
 
@@ -207,9 +207,33 @@ class SpeechToText:
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(transcript)
         print("Save transcript to file: ", transcript_path)
-        alignment.to_csv(csv_transcript_path,
+        alignment.to_csv(csv_path,
                          encoding='utf-8', index=False)
-        print("Save transcript to file: ", csv_transcript_path)
+        print("Save transcript to file: ", csv_path)
+
+    def save_alignment_to_srt(self, audio_path: str,
+                              srt_path: str) -> None:
+        '''
+            Save transcript as text file and aligned transcript as csv file
+
+            Parameters:
+                audio_path: str
+                    Path to the audio file
+                transcript_path: str
+                    Path to save transcript text file
+                aligned_transcript_path: str
+                    Path to save aligned transcript csv file
+        '''
+        _, alignment = self._transcribe_with_path(audio_path)
+
+        with open(srt_path, 'w', encoding='utf-8') as f:
+            for i in range(len(alignment)):
+                start = self.sec_to_timecode(alignment["start"].values[i])
+                end = self.sec_to_timecode(alignment["end"].values[i])
+                word = alignment["word"].values[i]
+                f.write(f'{i+1}\n')
+                f.write(f'{start} --> {end}\n')
+                f.write(f'{word}\n\n')
 
     @staticmethod
     def resampling(speech_array: np.ndarray,
@@ -245,3 +269,18 @@ class SpeechToText:
                 res_type=res_type
             )
         return speech_array, target_sampling_rate
+
+    @staticmethod
+    def sec_to_timecode(x: float) -> str:
+        '''
+        Calculate timecode from second
+
+        Parameters:
+            x: float
+                Second
+        '''
+        hour, x = divmod(x, 3600)
+        minute, x = divmod(x, 60)
+        second, x = divmod(x, 1)
+        millisecond = int(x * 1000.)
+        return '%.2d:%.2d:%.2d,%.3d' % (hour, minute, second, millisecond)
