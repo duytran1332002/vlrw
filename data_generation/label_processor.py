@@ -6,11 +6,13 @@ import shutil
 import pandas as pd
 import pysrt
 import utils
+import matplotlib.pyplot as plt
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
 from vPhon import convert_grapheme_to_phoneme
 from math import floor
 from random import shuffle
+from wordcloud import WordCloud
 
 
 class LabelProcessor:
@@ -29,14 +31,15 @@ class LabelProcessor:
         self.freq_path = os.path.join(self.data_dir, 'freq.csv')
         self.vocab_path = os.path.join(self.data_dir, 'vocabs_sorted_list.txt')
         freq_list = utils.read_csv_to_list(self.freq_path)
+        freq_list = utils.convert_column_datatype(freq_list,
+                                                  column=1,
+                                                  datatype=int)
         # check n_class
         if 0 < self.n_class < len(freq_list):
             # sort freq_list and get top n_class
             freq_list = sorted(freq_list, key=lambda x: x[1], reverse=True)
             freq_list = freq_list[:self.n_class]
-        self.freq_dict = dict(utils.convert_column_datatype(freq_list,
-                                                            column=1,
-                                                            datatype=int))
+        self.freq_dict = dict(freq_list)
         self.total_vocabs = 0
         self.n_new_vocab = 0
         self.total_samples = 0
@@ -181,17 +184,37 @@ class LabelProcessor:
             str:
                 _description_
         """
+        similarity_dict = {
+            'gay': 'gây',
+            'bây': 'bay',
+            'mây': 'may',
+            'kiềm': 'kìm',
+            'tiêm': 'tim',
+            'tiềm': 'tìm',
+            'gập': 'gặp',
+            'lập': 'lặp'
+        }
+        word = similarity_dict.get(word, word)
+
         phon = convert_grapheme_to_phoneme(word)
 
-        # merge all 'hỏi' and 'ngã'  together
+        # merge all 'hỏi' and 'ngã' together
         if phon[-2:] in ['C2', 'C1']:
             for phone, _ in self.grapheme_dict.items():
                 if phone[:-2] == phon[:-2] and phone[-2:] in ['C2', 'C1']:
-                    return self.grapheme_dict[phone]
+                    phon = phone
+                    break
 
-        if self.grapheme_dict.get(phon, None) is None:
-            self.grapheme_dict[phon] = word
-            return word
+        # merge all 'ăm' and 'âm' together
+        if phon[-4:-2] in ['am', 'əm']:
+            for phone, _ in self.grapheme_dict.items():
+                if phone[:-4] == phon[:-4] and phone[-4:-2] in ['am', 'əm']:
+                    # print(f'{phone[:-4]} {phon[:-4]}')
+                    # print(f'{phone[-4:-2]}')
+                    phon = phone
+                    break
+
+        self.grapheme_dict[phon] = self.grapheme_dict.get(phon, word)
 
         return self.grapheme_dict[phon]
 
@@ -289,12 +312,10 @@ class LabelProcessor:
                 word = row.word
 
                 # remove tag
+                is_tagged = False
                 if self.is_tagged(word):
                     word = word[:-2]
-                else:
-                    # only process tagged word
-                    if tag_only:
-                        continue
+                    is_tagged = True
 
                 # merge label
                 if word == 'con':  # avoid error when uploading on cloud
@@ -310,6 +331,10 @@ class LabelProcessor:
                 temp_freq_dict[word] = temp_freq_dict.get(word, 0) + 1
                 self.total_samples += 1
                 sample_set.add(word)
+
+                # only process tagged word
+                if tag_only and not is_tagged:
+                    continue
 
                 # check word folder
                 label_dir = os.path.join(self.word_video_dir, word)
@@ -386,6 +411,12 @@ class LabelProcessor:
         self.print_process_info()
         self.print_database_info()
 
+    def enough_sample(self, tagged_freq_dict, threshold):
+        for word, freq in self.freq_dict.items():
+            if freq + tagged_freq_dict[word] < threshold:
+                return False
+        return True
+
     def tag(self, threshold: int = 0, mode: str = 'override', tag: str = '_0'):
         """_summary_
 
@@ -399,11 +430,16 @@ class LabelProcessor:
         """
         self.srt_files, self.srt_paths = self.get_file_paths(self.srt_dir,
                                                              'srt')
+        tagged_freq_dict = {word: 0 for word in self.freq_dict.keys()}
+        n_video = 0
         for srt_path in tqdm(self.srt_paths,
                              total=len(self.srt_paths),
                              desc='srt files',
                              unit=' file',
                              dynamic_ncols=True):
+            if self.enough_sample(tagged_freq_dict, threshold):
+                break
+            n_video += 1
             subs = pysrt.open(srt_path)
             for sub in tqdm(subs, leave=False):
                 self.total_samples += 1
@@ -424,17 +460,27 @@ class LabelProcessor:
                     is_tagged = True
 
                 if word in self.freq_dict.keys():
-                    if self.freq_dict[word] < threshold:
+                    estimation = self.freq_dict[word] + tagged_freq_dict[word]
+                    if estimation < threshold:
                         if not is_tagged:
                             sub.text = word + '_' + tag
-                        self.n_tagged += 1
+                        tagged_freq_dict[word] += 1
                 elif is_tagged and mode == 'override':
                     sub.text = word
-                    self.n_untagged += 1
             subs.save(srt_path)
 
         # print tag info
-        self.print_tag_info()
+        if n_video == 0:
+            start_date = 'None'
+            end_date = 'None'
+        else:
+            start_date = self.srt_files[0].split('_')[0]
+            end_date = self.srt_files[n_video - 1].split('_')[0]
+        # print(tagged_freq_dict)
+        self.print_tag_info(n_tagged=sum(list(tagged_freq_dict.values())),
+                            n_video=n_video,
+                            start_date=start_date,
+                            end_date=end_date)
         self.print_process_info()
 
     def split_train_val_test(self, train_size, test_size):
@@ -483,22 +529,11 @@ class LabelProcessor:
             test_dir = os.path.join(label_dir, 'test')
             utils.check_dir(test_dir)
 
-            # move samples
-            for sample in train_set:
-                sample_path = os.path.join(label_dir, sample)
-                annot_path = os.path.join(label_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, train_dir)
-                shutil.move(annot_path, train_dir)
-            for sample in val_set:
-                sample_path = os.path.join(label_dir, sample)
-                annot_path = os.path.join(label_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, val_dir)
-                shutil.move(annot_path, val_dir)
-            for sample in test_set:
-                sample_path = os.path.join(label_dir, sample)
-                annot_path = os.path.join(label_dir, sample[:-4] + '.txt')
-                shutil.move(sample_path, test_dir)
-                shutil.move(annot_path, test_dir)
+            for sample_set, sample_dir in zip([train_set, val_set, test_set],
+                                              [train_dir, val_dir, test_dir]):
+                for sample in sample_set:
+                    sample_path = os.path.join(label_dir, sample)
+                    self.move_sample_and_annot(sample_path, sample_dir)
 
             # print(f'Label: {os.path.basename(label_dir)} -', end=' ')
             # print(f'sample: {n_sample} -', end=' ')
@@ -520,28 +555,19 @@ class LabelProcessor:
         val_dir = os.path.join(label_dir, 'val')
         test_dir = os.path.join(label_dir, 'test')
 
-        # start moving samples out
-        for sample in utils.filter_extension(train_dir, 'mp4'):
-            sample_path = os.path.join(train_dir, sample)
-            annot_path = os.path.join(train_dir, sample[:-4] + '.txt')
-            shutil.move(sample_path, label_dir)
-            shutil.move(annot_path, label_dir)
-        os.rmdir(train_dir)
-        for sample in utils.filter_extension(val_dir, 'mp4'):
-            sample_path = os.path.join(val_dir, sample)
-            annot_path = os.path.join(val_dir, sample[:-4] + '.txt')
-            shutil.move(sample_path, label_dir)
-            shutil.move(annot_path, label_dir)
-        os.rmdir(val_dir)
-        for sample in utils.filter_extension(test_dir, 'mp4'):
-            sample_path = os.path.join(test_dir, sample)
-            annot_path = os.path.join(test_dir, sample[:-4] + '.txt')
-            shutil.move(sample_path, label_dir)
-            shutil.move(annot_path, label_dir)
-        os.rmdir(test_dir)
+        for dir in [train_dir, val_dir, test_dir]:
+            for sample_path in utils.filter_extension(dir, 'mp4',
+                                                      return_path=True):
+                self.move_sample_and_annot(sample_path, label_dir)
+            os.rmdir(dir)
 
         # print(f'Label: {os.path.basename(label_dir)} -', end=' ')
         # print(f'sample: {len(os.listdir(label_dir))}')
+
+    def move_sample_and_annot(self, sample_path, dest):
+        annot_path = sample_path[:-4] + '.txt'
+        shutil.move(sample_path, dest)
+        shutil.move(annot_path, dest)
 
     def generate_annotation(self, start, duration, sample_path):
         """_summary_
@@ -588,9 +614,28 @@ class LabelProcessor:
         print(f'    Total errors: {len(self.error_dict)}')
         print(f'        at: {self.error_path}')
 
-    def print_tag_info(self):
+    def print_tag_info(self, n_tagged, n_video, start_date, end_date):
         """_summary_
         """
-        print('\nIn this run,')
-        print(f'    Total tags: {self.total_samples}', end='')
-        print(f' - New tags: {self.n_new_sample}')
+        print(f'\nTotal tags: {n_tagged}')
+        print(f'        in {n_video} videos from {start_date} to {end_date}')
+
+    def print_top_n_class(self):
+        freq_list = sorted(self.freq_dict.items(),
+                           key=lambda x: x[1],
+                           reverse=True)[:self.n_class]
+        for word, freq in freq_list:
+            print(f'{word}: {freq}')
+
+    def plot_word_cloud(self):
+        # Create a WordCloud object with the desired settings
+        wc = WordCloud(background_color="white", max_words=1000,
+                       contour_width=3, contour_color='steelblue')
+
+        # Generate the word cloud image from the word frequency dictionary
+        wc.generate_from_frequencies(self.freq_dict)
+
+        # Display the generated image using matplotlib
+        plt.imshow(wc, interpolation='bilinear')
+        plt.axis("off")
+        plt.show()
