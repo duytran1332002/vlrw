@@ -150,6 +150,7 @@ class LabelProcessor:
         with contextlib.redirect_stdout(io.StringIO()):
             piece = video.subclip(start, end)
             piece.write_videofile(file_path, fps=video.fps)
+            piece.close()
             self.generate_annotation(start, piece.duration, file_path)
 
     def get_file_paths(self, dir, ext):
