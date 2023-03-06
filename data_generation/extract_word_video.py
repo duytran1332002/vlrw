@@ -29,14 +29,23 @@ def load_args():
                         default='override',
                         help='How to deal with existing files \
                                 override, skip or append')
-    parser.add_argument('--train-size',
-                        type=float,
-                        default=0.7,
-                        help='The proportion of training set')
-    parser.add_argument('--test-size',
-                        type=float,
-                        default=0.1,
-                        help='The proportion of test set')
+    parser.add_argument('--train-ratios',
+                        nargs='+',
+                        action='append',
+                        default=[[0.7, 0.8, 0.9]],
+                        help='The proportions of training set')
+    parser.add_argument('--test-ratios',
+                        nargs='+',
+                        action='append',
+                        default=[[0.15, 0.1, 0.05]],
+                        help='The proportions of test set \
+                              having the same order with train_ratios')
+    parser.add_argument('--thresholds',
+                        nargs='+',
+                        action='append',
+                        default=[[100, 1000]],
+                        help='Number of samples determining the ratio \
+                              having the same order with train_ratios')
 
     args = parser.parse_args()
 
@@ -53,8 +62,9 @@ if __name__ == '__main__':
     start_date = args.start_date
     end_date = args.end_date
     mode = args.mode
-    train_size = args.train_size
-    test_size = args.test_size
+    train_ratios = list(map(float, args.train_ratios[0]))
+    test_ratios = list(map(float, args.test_ratios[0]))
+    thresholds = list(map(int, args.thresholds[0]))
 
     # for debugging
     # data_dir = r'D:\Coding\LipReadingProject\test_data'
@@ -85,5 +95,8 @@ if __name__ == '__main__':
                                      start_date=start_date,
                                      end_date=end_date)
     label_processor.generate_video(mode=mode)
-    label_processor.split_train_val_test(train_size=train_size,
-                                         test_size=test_size)
+    label_processor.split_train_val_test(train_ratios=train_ratios,
+                                         test_ratios=test_ratios,
+                                         thresholds=thresholds)
+    # label_processor.split_train_val_test(train_ratios=train_ratios,
+    #                                      test_ratios=test_ratios)

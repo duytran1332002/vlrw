@@ -3,15 +3,16 @@ import datetime
 import io
 import os
 import shutil
+from math import floor
+from random import shuffle
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import pysrt
 import utils
-import matplotlib.pyplot as plt
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
 from vPhon import convert_grapheme_to_phoneme
-from math import floor
-from random import shuffle
 from wordcloud import WordCloud
 
 
@@ -150,7 +151,6 @@ class LabelProcessor:
         with contextlib.redirect_stdout(io.StringIO()):
             piece = video.subclip(start, end)
             piece.write_videofile(file_path, fps=video.fps)
-            piece.close()
             self.generate_annotation(start, piece.duration, file_path)
 
     def get_file_paths(self, dir, ext):
@@ -484,7 +484,7 @@ class LabelProcessor:
                             end_date=end_date)
         self.print_process_info()
 
-    def split_train_val_test(self, train_size, test_size):
+    def split_train_val_test(self, train_ratios, test_ratios, thresholds=[]):
         """_summary_
 
         Paramters:
@@ -493,18 +493,34 @@ class LabelProcessor:
             test_size: (_type_)
                 _description_
         """
-        val_size = 1 - (train_size + test_size)
+        ratios = []
+        for train_ratio, test_ratio in zip(train_ratios, test_ratios):
+            val_ratio = 1 - (train_ratio + test_ratio)
+            ratios.append([train_ratio, val_ratio, test_ratio])
+
+        if not thresholds:
+            q1, _, q3 = utils.compute_quartile(list(self.freq_dict.values()))
+            thresholds = [q1, q3]
 
         # get list of label directories
-        label_dirs = [os.path.join(self.word_video_dir, vocab)
-                      for vocab in self.freq_dict.keys()]
+        # label_info = [os.path.join(self.word_video_dir, vocab)
+        #               for vocab in self.freq_dict.keys()]
 
-        for label_dir in tqdm(label_dirs,
-                              desc='Labels',
-                              total=len(label_dirs),
-                              leave=True,
-                              unit=' label',
-                              dynamic_ncols=True):
+        for vocab, freq in tqdm(self.freq_dict.items(),
+                                desc='Labels',
+                                total=len(self.freq_dict),
+                                leave=True,
+                                unit=' label',
+                                dynamic_ncols=True):
+            label_dir = os.path.join(self.word_video_dir, vocab)
+
+            train_ratio, val_ratio, test_ratio = ratios[-1]
+            for i in range(len(thresholds)):
+                if freq <= thresholds[i]:
+                    train_ratio, val_ratio, test_ratio = ratios[i]
+                    break
+
+            # print(f'{train_ratio} - {val_ratio} - {test_ratio}')
             # merged the splitted before split again
             if self.is_splitted(label_dir):
                 self.merge_train_val_test(label_dir)
@@ -512,8 +528,8 @@ class LabelProcessor:
             samples = utils.filter_extension(label_dir, 'mp4')
             n_sample = len(samples)
 
-            train_idx = floor(train_size * n_sample)
-            val_idx = train_idx + floor(val_size * n_sample)
+            train_idx = floor(train_ratio * n_sample)
+            val_idx = train_idx + floor(val_ratio * n_sample)
 
             # shuffle data
             shuffle(samples)

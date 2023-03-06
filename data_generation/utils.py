@@ -727,3 +727,11 @@ def merge_dict(dict1, dict2):
 
 def convert_str_to_time(string):
     return datetime.datetime.strptime(string, '%H:%M:%S.%f').time()
+
+
+def compute_quartile(data):
+    data.sort()
+    q1 = np.percentile(data, 25)
+    q2 = np.median(data)
+    q3 = np.percentile(data, 75)
+    return [q1, q2, q3]
