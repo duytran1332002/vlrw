@@ -16,9 +16,12 @@ def load_args():
     parser.add_argument('--srt-dir',
                         default=None,
                         help='srt directory')
-    parser.add_argument('--word-video-dir',
+    parser.add_argument('--sample-dir',
                         default=None,
                         help='the directory of saving word-level video')
+    parser.add_argument('--annot-dir',
+                        default=None,
+                        help='the directory of saving annotation')
     parser.add_argument('-s', '--start-date',
                         default=None,
                         help='Which date to start')
@@ -58,7 +61,8 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     video_dir = args.video_dir
     srt_dir = args.srt_dir
-    word_video_dir = args.word_video_dir
+    sample_dir = args.sample_dir
+    annot_dir = args.annot_dir
     start_date = args.start_date
     end_date = args.end_date
     mode = args.mode
@@ -80,18 +84,21 @@ if __name__ == '__main__':
     # if user provides a data directory
     if data_dir is not None:
         dir_names = ['videos', 'srt_transcripts',
-                     'csv_transcripts', 'word_videos']
-        video_dir, srt_dir, csv_dir, word_video_dir = check_data_dir(
+                     'csv_transcripts', 'word_videos',
+                     'annotations']
+        (video_dir, srt_dir, csv_dir,
+         sample_dir, annot_dir) = check_data_dir(
             data_dir, dir_names)
 
     # check save_dir
-    check_dir(word_video_dir)
+    check_dir(sample_dir)
 
     # extract video
     label_processor = LabelProcessor(data_dir=data_dir,
                                      video_dir=video_dir,
                                      srt_dir=srt_dir,
-                                     word_video_dir=word_video_dir,
+                                     sample_dir=sample_dir,
+                                     annot_dir=annot_dir,
                                      start_date=start_date,
                                      end_date=end_date)
     label_processor.generate_video(mode=mode)
@@ -100,3 +107,4 @@ if __name__ == '__main__':
                                          thresholds=thresholds)
     # label_processor.split_train_val_test(train_ratios=train_ratios,
     #                                      test_ratios=test_ratios)
+    label_processor.move_annot(mode=mode)

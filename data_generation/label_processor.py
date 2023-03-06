@@ -18,12 +18,13 @@ from wordcloud import WordCloud
 
 class LabelProcessor:
     def __init__(self, data_dir=None, video_dir=None,
-                 srt_dir=None, word_video_dir=None,
+                 srt_dir=None, sample_dir=None, annot_dir=None,
                  start_date=None, end_date=None, n_class=0) -> None:
         self.data_dir = data_dir
         self.video_dir = video_dir
         self.srt_dir = srt_dir
-        self.word_video_dir = word_video_dir
+        self.sample_dir = sample_dir
+        self.annot_dir = annot_dir
         self.start_date = start_date
         self.end_date = end_date
         self.n_class = n_class
@@ -338,7 +339,7 @@ class LabelProcessor:
                     continue
 
                 # check word folder
-                label_dir = os.path.join(self.word_video_dir, word)
+                label_dir = os.path.join(self.sample_dir, word)
                 utils.check_dir(label_dir)
 
                 # if the label have train, val, test, merge them
@@ -503,7 +504,7 @@ class LabelProcessor:
             thresholds = [q1, q3]
 
         # get list of label directories
-        # label_info = [os.path.join(self.word_video_dir, vocab)
+        # label_info = [os.path.join(self.sample_dir, vocab)
         #               for vocab in self.freq_dict.keys()]
 
         for vocab, freq in tqdm(self.freq_dict.items(),
@@ -512,7 +513,7 @@ class LabelProcessor:
                                 leave=True,
                                 unit=' label',
                                 dynamic_ncols=True):
-            label_dir = os.path.join(self.word_video_dir, vocab)
+            label_dir = os.path.join(self.sample_dir, vocab)
 
             train_ratio, val_ratio, test_ratio = ratios[-1]
             for i in range(len(thresholds)):
@@ -656,3 +657,28 @@ class LabelProcessor:
         plt.imshow(wc, interpolation='bilinear')
         plt.axis("off")
         plt.show()
+
+    def move_annot(self, mode):
+        for word in tqdm(self.freq_dict.keys(),
+                         desc='Moving annotation',
+                         total=len(self.freq_dict),
+                         unit='folder',
+                         leave=False,
+                         dynamic_ncols=True):
+            label_dirs = [os.path.join(self.sample_dir, word),
+                          os.path.join(self.annot_dir, word)]
+            train_dirs = [os.path.join(label_dirs[0], 'train'),
+                          os.path.join(label_dirs[1], 'train')]
+            val_dirs = [os.path.join(label_dirs[0], 'val'),
+                        os.path.join(label_dirs[1], 'val')]
+            test_dirs = [os.path.join(label_dirs[0], 'test'),
+                         os.path.join(label_dirs[1], 'test')]
+            for dirs in [train_dirs, val_dirs, test_dirs]:
+                annot_names = utils.filter_extension(dirs[0], 'txt')
+                utils.check_dir(dirs[1])
+                for annot_name in annot_names:
+                    src = os.path.join(dirs[0], annot_name)
+                    dest = os.path.join(dirs[1], annot_name)
+                    if os.path.isfile(dest) and mode == 'skip':
+                        continue
+                    shutil.move(src, dest)
