@@ -14,6 +14,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
 from vPhon import convert_grapheme_to_phoneme
 from wordcloud import WordCloud
+from threading import Thread
 
 
 class LabelProcessor:
@@ -151,7 +152,8 @@ class LabelProcessor:
         '''
         with contextlib.redirect_stdout(io.StringIO()):
             piece = video.subclip(start, end)
-            piece.write_videofile(file_path, fps=video.fps)
+            fps = 29 if video.fps > 29 else video.fps
+            piece.write_videofile(file_path, fps=fps)
             self.generate_annotation(start, piece.duration, file_path)
 
     def get_file_paths(self, dir, ext):
