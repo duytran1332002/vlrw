@@ -34,7 +34,7 @@ for filename_idx, line in enumerate(lines):
     filename, person_id = line.split(',')
     print(f'idx: {filename_idx} \tProcessing.\t{filename}')
 
-    video_filename = os.path.join(args.video_direc, filename+'.mp4')
+    video_filename = os.path.join(args.video_direc, filename)
     landmarks_filename = os.path.join(args.landmark_direc, filename+'.pkl')
     dst_filename = os.path.join( args.save_direc, filename+'.npz')
 
@@ -44,6 +44,7 @@ for filename_idx, line in enumerate(lines):
     if os.path.exists(dst_filename):
         continue
 
+        
     # Extract mouth patches from segments
     sequence = dataloader.load_data(
         modality,
