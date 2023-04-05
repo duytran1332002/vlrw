@@ -735,3 +735,11 @@ def compute_quartile(data):
     q2 = np.median(data)
     q3 = np.percentile(data, 75)
     return [q1, q2, q3]
+
+
+def sum_time(*times):
+    total_time = datetime.timedelta(minutes=0, seconds=0)
+    for time in times:
+        total_time += datetime.timedelta(minutes=time.minute,
+                                         seconds=time.second)
+    return total_time.time()
