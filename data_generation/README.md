@@ -1,96 +1,127 @@
-# What I use
-- Torch==1.13.1
-- Conda==4.13.0
-- Linux==22.04.1
-- Cuda==11.6
-# Set up
-I sugget that you should use conda environment that I have introduced how to install it below.
-Install all the neccessary library by the code below:
-```
-pip install -r requirements.txt
-```
-You also need to install torch library, I have introduced how to install it below.
-# Using GPU
-## Install conda
-You can use conda environment by the code below
-```
-# Install Miniconda
-curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-```
-## Install torch
-### Install with conda
-```
-conda install pytorch torchvision torchaudio pytorch-cuda=11.6 -c pytorch -c nvidia
-```
-### Install with pip
-```
-pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
-```
-You can see detail here: https://pytorch.org/get-started/locally/
+# Introduction
 
-# Using CPU
-## Install torch
-### Install with conda
-```
-conda install pytorch torchvision torchaudio cpuonly -c pytorch
-```
-### Install with pip
-```
-pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
-```
-# Quick start
-```python
-from speech_to_text import SpeechToText
-stt = SpeechToText()
-# print and show the audio
-stt.print_result('/home/duy1332002/Desktop/Lip_Reading_THDH/data/speechtotext/t5.wav')
-# save the result to file
-stt.save_result_to_file('/home/duy1332002/Desktop/Lip_Reading_THDH/data/speechtotext/t5.wav', '/home/duy1332002/Desktop/Lip_Reading_THDH/data/speechtotext/test1.txt')
-```
+To generate lip reading dataset, the process includes these following steps:
 
-## Extract word video
-How to use extract_word_video.py to cut video of each word based on its duration in .srt file:
-```shell
-python extract_word_video.py --data-dir <path_to_data_directory> \
-                             --video-dir <path_to_video_or_video_folder> \
-                             --srt-dir <path_to_srt_or_srt_folder> \
-                             --csv-dir <path_to_csv_or_csv_folder> \
-                             --save-dir <path_to_word_video_or_word_video_folder> \
-                             --start-date <which date to start> \
-                             --end-date <which date to stop> \
-                             --mode <how_you_want_to_handle_duplicates> \
-```
-Notes:
-* If `data-dir` is provided, there is no need to provide `video-dir`, `srt-dir`, `csv-dir` and `save-dir`. However, `data-dir` must have at least the structure as follow. Its sub-folder must be remained the exact name.
+1. Video data is collected from online source like YouTube, TikTok,...
+2. Speech2Text is performed to generate the transcript for each video.
+3. Alignment model is used to generate the timestamp for each word in the transcript.
+4. Timestamps are manually corrected by using [SubtitleEdit](https://www.nikse.dk/subtitleedit).
+5. Samples are extracted from video by following the processed timestamps, and annotations are produced. Then, they are divided into training, validation and test sets.
+
+In these steps, step 1, 2, 3 and 5 can be automatically achieved by following the next sections.
+
+# Set up data directory
+
+The directory in data generation step will follow the below rules. All you need to do is create an empty `data` directory in advance. The rest will be created automatically.
+
 ```
 |- data/
 |   |- vocabs_sorted_list.txt (generated when run)
 |   |- missing_files.txt (generated when run)
 |   |- errors.csv (generated when run)
 |   |- videos/
+|   |- audios/
 |   |- srt_transcripts/
-|   |- csv_transcripts/ (optional)
-|   |- word_videos/ (optional)
-|       |-<label>
-|           |-<date><id>.mp4
-|       |-ạ
-|           |-2022070100001.mp4
+|   |- word_videos/
+|       |-<label>/
+|           |-train/
+|               |-<date><id>.mp4
+|           |-val/
+|               |-<date><id>.mp4
+|           |-test/
+|               |-<date><id>.mp4
+|   |- annotations/
+|       |-<label>/
+|           |-train/
+|               |-<date><id>.txt
+|           |-val/
+|               |-<date><id>.txt
+|           |-test/
+|               |-<date><id>.txt
 ```
-* The `mode` includes:
-  * `override`: override existing files (default)
-  * `skip`: if there is an existing file, do nothing
-  * `append`: if there is an existing file, change the name of the duplicate
+
+# Steps
+
+Before going to the first step, make sure that
+
+- You are in `data_generation` directory of the project:
+
+```shell
+cd data_generation
+```
+
+- Data directory and its subdirectories are set up as in the previous section.
+
+## 1. Download and Alignment
+
+Here is how to use collect_data.py download videos, extract audio and transcribe videos:
+
+```shell
+python collect_data.py --data-dir <path_to_data_directory> \
+                       --url <link_to_youtube_playlist_or_video> \
+                       --start-date <which_date_to_start> \
+                       --end-date <which_date_to_stop> \
+                       --operation <operation_to_perform> \
+                       --mode <mode_to_run>
+```
+
+Notes:
+
+- Link to the VTV weather forecast live stream playplist is the default value of `url`.
+- `start_date` and `end_date` are in `YYYYMMDD` format
+- `operation` includes:
+  - Download video(s): `--operation 1`
+  - Extract audio: `--operation 2`
+  - Transcribe and align: `--operation 3`
+  - All above: `--operation 0`
+- Except extracting audio, transcribing and align, other operations require internet connection.
+- `mode` includes:
+  - `override`: override existing files (default).
+  - `skip`: if there is an existing file, do nothing.
+
+For example, to do all operations:
+
+```shell
+python collect_data.py --data-dir ..\data \
+                       --start-date 20230404 \
+                       --end-date 20230404 \
+```
+
+## 2. Extract samples
+
+Here is how to use extract_word_video.py to cut video of each word based on its duration in .srt file:
+
+```shell
+python extract_word_video.py --data-dir <path_to_data_directory> \
+                             --start-date <which_date_to_start> \
+                             --end-date <which_date_to-stop> \
+                             --mode <how_you_want_to_handle_duplicates> \
+                             --train-ratios <proportion_of_training_set> \
+                             --test-ratios <proportion_of_test_set> \
+                             --thresholds <number_of_samples_determining_the_ratio>
+```
+
+Notes:
+- `mode` includes:
+  - `override`: override existing files (default)
+  - `skip`: if there is an existing file, do nothing
+- `train-ratios` have input of a list. The default value is [0.7, 0.8, 0.9]
+- `test-ratios` have input of a list. The default value is [0.15, 0.1, 0.05]
+- The ratio of validation set will be decided based on ratios of training set and test set.
+- `thresholds` have input of a list. The default value is [100, 1000]
 
 For example:
+
 ```shell
-python extract_word_video.py --data-dir lipreading/data \
+python extract_word_video.py --data-dir ..\data \
                              --start-date 20220701 \
                              --end-date 20220806 \
                              --mode override \
 ```
 
-# Citation
+Explanation for why there are different dividing ratios for different labels is that our dataset retains the natural distribution of the word. This also means that the more frequent a word's appearance is, the more importance it is. As a result, the more important labels is prioritized to have more samples in training set than others.
+
+# References
 
 [![CITE](https://zenodo.org/badge/DOI/10.5281/zenodo.5356039.svg)](https://github.com/vietai/ASR)
 
@@ -102,4 +133,28 @@ python extract_word_video.py --data-dir lipreading/data \
   title = {{Vietnamese end-to-end speech recognition using wav2vec 2.0}},
   url = {https://github.com/vietai/ASR},
   year = {2021}
+},
+
+@misc{vPhon
+  author = {Kirby, James},
+  title = {vPhon: a Vietnamese phonetizer (version 2.1.1)}
+  url = {http://github.com/kirbyj/vPhon/},
+  year = {2018}
+},
+
+@article{mtl_alignment,
+  author    = {Jiawen Huang and
+               Emmanouil Benetos and
+               Sebastian Ewert},
+  title     = {Improving Lyrics Alignment through Joint Pitch Detection},
+  journal   = {CoRR},
+  volume    = {abs/2202.01646},
+  year      = {2022},
+  url       = {https://arxiv.org/abs/2202.01646},
+  eprinttype = {arXiv},
+  eprint    = {2202.01646},
+  timestamp = {Wed, 09 Feb 2022 15:43:34 +0100},
+  biburl    = {https://dblp.org/rec/journals/corr/abs-2202-01646.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
 }
+```
