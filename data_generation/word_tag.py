@@ -24,11 +24,11 @@ def load_args():
                         help='Which date to stop')
     parser.add_argument('--n-class',
                         type=int,
-                        default=400,
+                        default=600,
                         help='Get top n-class')
     parser.add_argument('-t', '--threshold',
                         type=int,
-                        default=15,
+                        default=150,
                         help='Minimum number of sample per class')
     parser.add_argument('-m', '--mode',
                         default='override',
@@ -38,8 +38,7 @@ def load_args():
                         default='0',
                         help='Define tag')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
@@ -64,7 +63,7 @@ if __name__ == '__main__':
     # n_class = 400
     # threshold = 20
     # mode = 'override'
-    # tag = '_0'
+    # tag = '0'
 
     # check mode
     assert mode in ['override', 'skip'], 'Invalid mode'
@@ -82,5 +81,5 @@ if __name__ == '__main__':
                                      srt_dir=srt_dir,
                                      start_date=start_date,
                                      end_date=end_date,
-                                     n_class=400)
+                                     n_class=n_class)
     label_processor.tag(threshold, mode, tag)

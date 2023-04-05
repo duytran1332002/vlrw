@@ -4,13 +4,13 @@ import glob
 import os
 import string
 import warnings
-
 import librosa
 import numpy as np
 import soundfile
 import torch
 from g2p_en import G2p
 from pytube import Playlist, YouTube
+
 
 g2p = G2p()
 
@@ -611,6 +611,7 @@ def get_file_list(files: list, start=None, end=None):
             list of files from start to end
     '''
     extension = os.path.splitext(files[0])[1]
+
     # implement binary search to find start srt file
     if start is not None and start >= files[0][:8]:
         start_idx = binary_seach(files, start + extension)
@@ -618,6 +619,7 @@ def get_file_list(files: list, start=None, end=None):
             raise Exception('Invalid start date')
     else:
         start_idx = 0
+
     # implement binary search to find end srt file
     if end is not None and end <= files[-1][:8]:
         end_idx = binary_seach(files, end + extension)
@@ -725,3 +727,19 @@ def merge_dict(dict1, dict2):
 
 def convert_str_to_time(string):
     return datetime.datetime.strptime(string, '%H:%M:%S.%f').time()
+
+
+def compute_quartile(data):
+    data.sort()
+    q1 = np.percentile(data, 25)
+    q2 = np.median(data)
+    q3 = np.percentile(data, 75)
+    return [q1, q2, q3]
+
+
+def sum_time(*times):
+    total_time = datetime.timedelta(minutes=0, seconds=0)
+    for time in times:
+        total_time += datetime.timedelta(minutes=time.minute,
+                                         seconds=time.second)
+    return total_time.time()
