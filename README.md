@@ -45,7 +45,7 @@ if "__main__" == __name__:
     num_classes = 624
     model = get_model_from_json(config_path, modality, num_classes)
     # -- load model
-    model_path = "path of model weight you want to test"
+    model_path = "path of file model weight you want to test .pth"
     model = load_model(model_path, model)
     #-- evaluate
     label_list = [line.strip() for line in open('labels/labels.txt')]
