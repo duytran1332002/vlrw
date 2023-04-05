@@ -34,10 +34,7 @@ def check_alignment(audio_path, alignment_path, save_audio=False, path_save_audi
 ```python
 pip install requirements.txt
 ```
-
-Link download weight of 2 models: https://drive.google.com/drive/folders/1214P6d7X_bLislVTkYV_us_j49xIXvfr?usp=share_link
-\n
-Go to this link and download weight two model. Open file Lip-reading.ipynb and change path at "model_path" variable:
+Go to this link (https://drive.google.com/drive/folders/1214P6d7X_bLislVTkYV_us_j49xIXvfr?usp=share_link) and download weight two model. Open file Lip-reading.ipynb and change path at "model_path" variable:
 
 ```python
 if "__main__" == __name__:
