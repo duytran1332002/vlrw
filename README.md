@@ -31,6 +31,7 @@ def check_alignment(audio_path, alignment_path, save_audio=False, path_save_audi
 ```
 
 # How to use
+Run the command below to install all necessary functions
 ```python
 pip install requirements.txt
 ```
