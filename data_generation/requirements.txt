@@ -15,7 +15,7 @@ g2p_en==2.1.0
 transformers==4.9.2 
 pyctcdecode==v0.1.0
 kenlm
-pytube==12.2.1
+pytube==12.1.2
 pysrt==1.1.2
 moviepy == 1.0.3
 wordcloud==1.8.2.2
