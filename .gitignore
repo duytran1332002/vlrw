@@ -1,6 +1,7 @@
 # ignore folders
 __pycache__
 cache
+<<<<<<< HEAD
 data
 checkpoints
 
@@ -9,3 +10,12 @@ testing.ipynb
 Testing.ipynb
 test_cmd.txt
 data_analystic.ipynb
+=======
+videos
+audios
+srt_transcripts
+
+# ignore files
+Testing.ipynb
+test_cmd.txt
+>>>>>>> master

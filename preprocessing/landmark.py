@@ -129,6 +129,7 @@ class LandmarkTracker:
         frame_height = int(cap.get(4))
         frame_rate = cap.get(5)
         frame_count = int(cap.get(7))
+        frame_interval = frame_count / frame_rate
         # get video name
         video_name = os.path.basename(video_path)
 
@@ -144,7 +145,10 @@ class LandmarkTracker:
         # loop through video
         while cap.isOpened():
             # set frame / mes (frame per mes) 
-            cap.set(cv2.CAP_PROP_POS_MSEC,(frame_id*pos_mes))
+            #cap.set(cv2.CAP_PROP_POS_MSEC,(frame_id*pos_mes))
+            
+            # cap number frames = 29 =  frame_rate
+            cap.set(cv2.CAP_PROP_POS_FRAMES, (frame_id) * frame_interval)
             # read frame
             ret, frame = cap.read()
             if ret:
@@ -154,15 +158,16 @@ class LandmarkTracker:
                 # landmark
                 if save_landmark:
                     faces = self.tracker.predict(frame=frame)
+                    landmark = []
                     for face in faces:
                         if face.success:
-                            landmark = []
                             for pt_num, (x,y,c) in enumerate(face.lms):
                                 landmark.append((y,x))
                     # convert to numpy array
                     landmark = np.array(landmark)
                     # save landmark
-                    landmarks.append(landmark)
+                    if landmark.shape[0] > 0:
+                        landmarks.append(landmark)
                 # update frame id
                 frame_id += 1
 
@@ -178,8 +183,13 @@ class LandmarkTracker:
         
         # save landmark to pickle file with directory
         print(self.dir_save_landmark)
+        # EX: an/train/t.mp4 => get an/train
+        label_name = os.path.dirname(video_path).split("/")[-2] + "/" + os.path.basename(os.path.dirname(video_path))
+        save_path  = os.path.join(self.dir_save_landmark, label_name)
         if save_landmark:
-            with open(os.path.join(self.dir_save_landmark, f'{video_name}.pkl'), 'wb') as f:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            with open(os.path.join(save_path, f'{video_name}.pkl'), 'wb') as f:
                 pickle.dump(landmarks, f)
                 print(f'Landmark saved successfully')
 
@@ -193,17 +203,23 @@ if __name__ == '__main__':
     args = load_args()
 
     Landmark = LandmarkTracker()
+    sub_folders = ["train", "test", "val"]
     #check video path is folder or file
     if os.path.isdir(args.video_path):
-        for file in os.listdir(args.video_path):
-            if file.endswith(".mp4"):
-                video_path = os.path.join(args.video_path, file)
-                Landmark.get_landmark(video_path = video_path, pos_mes = args.pos_mes, 
-                save_crop_mouth= args.save_crop_mouth, save_landmark=args.save_landmark, 
-                mouth_crop_threshold = args.mouth_crop_threshold, 
-                pad = args.pad, dir_save_crop_mouth=args.dir_save_crop_mouth,
-                dir_save_landmark=args.dir_save_landmark,
-                show = args.show)
+        for folder in os.listdir(args.video_path):
+            for sub_folder in sub_folders:
+                for file in os.listdir(os.path.join(args.video_path, folder, sub_folder)):
+                    #check the file landmark has exist
+                    if os.path.exists(os.path.join(args.dir_save_landmark, folder, sub_folder, file + ".pkl")):
+                        continue
+                    if file.endswith(".mp4"):
+                        video_path = os.path.join(args.video_path, folder, sub_folder, file)
+                        Landmark.get_landmark(video_path = video_path, pos_mes = args.pos_mes, 
+                        save_crop_mouth= args.save_crop_mouth, save_landmark=args.save_landmark, 
+                        mouth_crop_threshold = args.mouth_crop_threshold, 
+                        pad = args.pad, dir_save_crop_mouth=args.dir_save_crop_mouth,
+                        dir_save_landmark=args.dir_save_landmark,
+                        show = args.show)
     else:
         Landmark.get_landmark(video_path = args.video_path, pos_mes = args.pos_mes, 
         save_crop_mouth= args.save_crop_mouth, save_landmark=args.save_landmark, 
