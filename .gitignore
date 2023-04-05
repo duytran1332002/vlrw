@@ -1,0 +1,10 @@
+# ignore folders
+__pycache__
+cache
+videos
+audios
+srt_transcripts
+
+# ignore files
+Testing.ipynb
+test_cmd.txt
