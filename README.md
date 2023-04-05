@@ -5,7 +5,7 @@
 - Name of classes: VD: SpeechToText.
 ## Folder
 - data: all functions to process the data.
-- preprocessing: all functiosn for proprocessing the data for training.
+- preprocessing: all functions of preprocessing the data before training training.
 - model: all models are necessary for training.
 ```
 |- data/
