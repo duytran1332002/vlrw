@@ -51,6 +51,7 @@ cd data_generation
 ```
 
 - Data directory and its subdirectories are set up as in the previous section.
+- All packages and libraries in requirements (in this directory) are installed.
 
 ## 1. Download and Alignment
 
