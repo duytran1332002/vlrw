@@ -1,5 +1,4 @@
 import argparse
-
 from label_processor import LabelProcessor
 from utils import check_data_dir, check_dir
 
@@ -31,7 +30,7 @@ def load_args():
     parser.add_argument('-m', '--mode',
                         default='override',
                         help='How to deal with existing files \
-                                override, skip or append')
+                                override or skip')
     parser.add_argument('--train-ratios',
                         nargs='+',
                         action='append',
@@ -107,4 +106,4 @@ if __name__ == '__main__':
                                          thresholds=thresholds)
     # label_processor.split_train_val_test(train_ratios=train_ratios,
     #                                      test_ratios=test_ratios)
-    label_processor.move_annot(mode=mode)
+    # label_processor.move_annot(mode=mode)

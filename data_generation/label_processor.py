@@ -14,15 +14,15 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from tqdm import tqdm
 from vPhon import convert_grapheme_to_phoneme
 from wordcloud import WordCloud
-from threading import Thread
 
 
 class LabelProcessor:
-    def __init__(self, data_dir=None, video_dir=None,
+    def __init__(self, data_dir=None, video_dir=None, audio_dir=None,
                  srt_dir=None, sample_dir=None, annot_dir=None,
                  start_date=None, end_date=None, n_class=0) -> None:
         self.data_dir = data_dir
         self.video_dir = video_dir
+        self.audio_dir = audio_dir
         self.srt_dir = srt_dir
         self.sample_dir = sample_dir
         self.annot_dir = annot_dir
@@ -274,6 +274,7 @@ class LabelProcessor:
             tag_only: (bool, optional). Defaults: False.
                 _description_
         """
+        # TODO: Compute video length
         # get videos and srt files
         self.videos, self.video_paths = self.get_file_paths(self.video_dir,
                                                             'mp4')
@@ -565,10 +566,10 @@ class LabelProcessor:
         self.print_database_info()
 
     def merge_train_val_test(self, label_dir):
-        """_summary_
+        """Merge train, val and test sets into 1
 
         Paramters:
-            label_dir: (_type_)
+            label_dir: path to sample
                 _description_
         """
         train_dir = os.path.join(label_dir, 'train')
@@ -684,3 +685,148 @@ class LabelProcessor:
                     if os.path.isfile(dest) and mode == 'skip':
                         continue
                     shutil.move(src, dest)
+
+    def cut_audio(self, mode):
+        pass
+
+    def generate_audio(self, mode):
+        # get videos and srt files
+        self.videos, self.video_paths = self.get_file_paths(self.video_dir,
+                                                            'mp4')
+        self.srt_files, self.srt_paths = self.get_file_paths(self.srt_dir,
+                                                             'srt')
+
+        # check missing data
+        self.check_missing_data()
+
+        # get copy of self.freq_dict but all values = 0
+        freq_dict = {key: 0 for key in self.freq_dict.keys()}
+        # freq_dict = dict()
+
+        sample_set = set()
+
+        # extract word-level video
+        for video_path, srt_path in tqdm(zip(self.video_paths, self.srt_paths),
+                                         total=len(self.video_paths),
+                                         desc='Videos',
+                                         unit=' video',
+                                         dynamic_ncols=True):
+            temp_freq_dict = dict()
+
+            # Load the video file
+            video = VideoFileClip(video_path)
+            date = os.path.basename(video_path)[:8]
+
+            # read srt to dataframe
+            df = self.read_srt_to_df(srt_path)
+
+            for _, row in tqdm(df.iterrows(),
+                               total=len(df),
+                               desc='Words',
+                               unit=' word',
+                               leave=False,
+                               dynamic_ncols=True):
+                # cut the video into smaller pieces
+                start = row.start
+                end = row.end
+                word = row.word
+
+                # remove tag
+                is_tagged = False
+                if self.is_tagged(word):
+                    word = word[:-2]
+                    is_tagged = True
+
+                # merge label
+                if word == 'con':  # avoid error when uploading on cloud
+                    word = 'kon'
+                word = self.merge_label(word)
+
+                # only process top n_class
+                if word not in self.freq_dict.keys():
+                    if self.n_class != 0:
+                        continue
+
+                # update total sample and vocabs
+                temp_freq_dict[word] = temp_freq_dict.get(word, 0) + 1
+                self.total_samples += 1
+                sample_set.add(word)
+
+                # only process tagged word
+                if tag_only and not is_tagged:
+                    continue
+
+                # check word folder
+                label_dir = os.path.join(self.sample_dir, word)
+                utils.check_dir(label_dir)
+
+                # if the label have train, val, test, merge them
+                if self.is_splitted(label_dir):
+                    self.merge_train_val_test(label_dir)
+
+                # get sample list in this label directory
+                sample_names = utils.filter_extension(label_dir, 'mp4')
+                n_sample = len(sample_names)
+
+                # name the video
+                id = f'{date}{str(temp_freq_dict[word]).zfill(5)}'
+                sample_name = id + '.mp4'
+                sample_path = os.path.join(label_dir, sample_name)
+                if sample_name in sample_names and mode == 'skip':
+                    if not self.is_annotated(sample_path):
+                        piece = VideoFileClip(sample_path)
+                        duration = piece.duration
+                        piece.close()
+                        self.generate_annotation(start, duration, sample_path)
+                    continue
+
+                # cut video
+                try:
+                    self.cut_video(video, start, end, sample_path)
+                    self.n_new_sample += 1
+                    error_id = id + '_' + word
+                    if self.error_dict.get(error_id, None) is not None:
+                        del self.error_dict[error_id]
+                    new_sample_names = utils.filter_extension(label_dir, 'mp4')
+                    if n_sample != len(new_sample_names):
+                        freq_dict[word] = freq_dict.get(word, 0) + 1
+                except KeyboardInterrupt:
+                    print('\n')
+                    os._exit(0)
+                except Exception as e:
+                    error_id = id + '_' + word
+                    if self.error_dict.get(error_id, None) is None:
+                        start = utils.convert_str_to_time(start)
+                        start = self.change_boundary(start, 0.01)
+                        end = utils.convert_str_to_time(end)
+                        end = self.change_boundary(end, -0.01)
+                        self.error_dict[error_id] = [start, end, e]
+                        self.n_new_error += 1
+                    self.total_errors += 1
+        video.close()
+
+        # clean leftover
+        for file in utils.filter_extension('', 'mp3'):
+            os.remove(file)
+
+        # update self.freq_dict
+        self.freq_dict = utils.merge_dict(self.freq_dict, freq_dict)
+
+        # update vocabs
+        self.n_new_vocab = len(utils.find_complement(sample_set,
+                                                     self.freq_dict.keys(),
+                                                     'a'))
+        self.total_vocabs = len(list(sample_set))
+
+        # save info
+        utils.save_list_to_csv(list(self.freq_dict.items()), self.freq_path)
+        utils.save_list_to_txt(sorted(list(self.freq_dict.keys()),
+                                      reverse=True),
+                               self.vocab_path)
+        errors = [[error_id, start, end, e]
+                  for error_id, [start, end, e] in self.error_dict.items()]
+        utils.save_list_to_csv(errors, self.error_path)
+
+        # print info
+        self.print_process_info()
+        self.print_database_info()
