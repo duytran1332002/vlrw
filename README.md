@@ -1,8 +1,11 @@
-# Lip_Reading_THDH
-# Rules
+# VLRW: A Vietnamese Dataset For Lip-reading
+To access the dataset, please follow this [link](https://huggingface.co/datasets/fptu/vlrw).
+
+## Rules
 - Name of folders, files, parameters: VD: lip_reading.
 - Name of functions: first word is a verb, VD: get_the_result.
 - Name of classes: VD: SpeechToText.
+
 ## Folder
 - "configs": contains configuration files for all models.
 - "data_generation": includes functions for repairing and processing data, from video to sample video.
@@ -30,7 +33,7 @@ def check_alignment(audio_path, alignment_path, save_audio=False, path_save_audi
     pass
 ```
 
-# How to use
+## How to use
 Run the command below to install all necessary functions
 ```python
 pip install requirements.txt
